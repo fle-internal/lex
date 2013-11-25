@@ -36,6 +36,7 @@ function show_api_messages(messages, msg_id) {
             break;
         default:
             // Programming error; this should not happen
+            // NOTE: DO NOT WRAP THIS STRING.
             throw "do not call show_api_messages object of type " + (typeof messages);
     }
 }
@@ -53,7 +54,7 @@ function force_sync() {
     //   then shows a message for success/failure
     doRequest("/securesync/api/force_sync")
         .success(function() {
-            show_message("success", "Successfully launched data syncing job.  Please visit <a href='/management/device/'>your device management page</a> to view sync status.", "id_command")
+            show_message("success", gettext("Successfully launched data syncing job. After syncing completes, visit the <a href='/management/device/'>device management page</a> to view results."), "id_command")
         })
         .fail(function(resp) {
             communicate_api_failure(resp, "id_command")
@@ -90,7 +91,7 @@ var TotalPointView = Backbone.View.extend({
 
         // only display the points if they are greater than zero, and the user is logged in
         if (points > 0 && this.model.get("is_logged_in")) {
-            this.$el.text("Total Points: " + points);
+            this.$el.text(gettext("Total Points") + ": " + points);
             this.$el.show();
         } else {
             this.$el.hide();
@@ -132,7 +133,7 @@ $(function(){
             toggle_state("admin", data.is_admin);
             if (data.is_logged_in){
                 if (data.is_admin) {
-                    $('#nav_logout').text(data.username + " (Logout)");
+                    $('#nav_logout').text(data.username + " (" +  gettext("Logout") + ")");
                 }
                 else {
                     $('#logged-in-name').text(data.username);
@@ -148,13 +149,13 @@ $(function(){
 // Related to student log progress
 $(function(){
     // load progress data for all videos linked on page, and render progress circles
-    var youtube_ids = $.map($(".progress-circle[data-youtube-id]"), function(el) { return $(el).data("youtube-id") });
-    if (youtube_ids.length > 0) {
-        doRequest("/api/get_video_logs", youtube_ids)
+    var video_ids = $.map($(".progress-circle[data-video-id]"), function(el) { return $(el).data("video-id") });
+    if (video_ids.length > 0) {
+        doRequest("/api/get_video_logs", video_ids)
             .success(function(data) {
                 $.each(data, function(ind, video) {
                     var newClass = video.complete ? "complete" : "partial";
-                    $("[data-youtube-id='" + video.youtube_id + "']").addClass(newClass);
+                    $("[data-video-id='" + video.video_id + "']").addClass(newClass);
                 });
             })
             .fail(function(resp) {
@@ -224,7 +225,6 @@ function get_server_status(options, fields, callback) {
     var request = $.ajax({
         url:  prefix + args.path,
         dataType: args.hostname ? "jsonp" : "json",
-        jsonpCallback: "temp_callback", // TODO(jamalex): remove this line once the central server has this endpoint properly running
         data: {fields: (fields || []).join(",")}
     }).success(function(data) {
         callback(data);

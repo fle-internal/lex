@@ -1,25 +1,28 @@
+import glob
 import json
 import os
 import requests
+import shutil
+import sys
 import zipfile
 from optparse import make_option
 from StringIO import StringIO
 
 from django.core.management.base import BaseCommand, CommandError
-from django.http import HttpRequest
-from django.views.i18n import javascript_catalog
+from django.utils.translation import ugettext as _
 
 import settings
 import version
+from .classes import UpdatesStaticCommand
+from i18n.models import LanguagePack
 from settings import LOG as logging
-from shared.i18n import convert_language_code_format
+from shared.i18n import convert_language_code_format, update_jsi18n_file
 from utils.general import ensure_dir
-from main.models import LanguagePack
 
 
 LOCALE_ROOT = settings.LOCALE_PATHS[0]
 
-class Command(BaseCommand):
+class Command(UpdatesStaticCommand):
     help = "Download language pack requested from central server"
 
     option_list = BaseCommand.option_list + (
@@ -37,6 +40,13 @@ class Command(BaseCommand):
                     help="Specify the software version to download a language pack for."),
     )
 
+    stages = (
+        "download_language_pack",
+        "unpack_language_pack",
+        "update_database",
+        "add_js18n_file",
+    )
+
     def handle(self, *args, **options):
         if settings.CENTRAL_SERVER:
             raise CommandError("This must only be run on distributed servers server.")
@@ -48,23 +58,35 @@ class Command(BaseCommand):
         if software_version == version.VERSION:
             logging.info("Note: software version set to default version. This is fine (and may be intentional), but you may specify a software version other than '%s' with -s" % version.VERSION)
 
+
         # Download the language pack
-        zip_file = get_language_pack(code, software_version)
+        try:
+            self.start("Downloading language pack '%s'" % code)
+            zip_file = get_language_pack(code, software_version)
+        except CommandError as e: # 404
+            sys.exit('404 Not found: Could not download language pack file %s ' % _language_pack_url(code, software_version))
 
         # Unpack into locale directory
+        self.next_stage("Unpacking language pack '%s'" % code)
         unpack_language(code, zip_file)
 
         # Update database with meta info
+        self.next_stage("Updating database for language pack '%s'" % code)
         update_database(code)
 
-        # 
-        add_jsi18n_file(code)
+        #
+        self.next_stage("Creating static files for language pack '%s'" % code)
+        update_jsi18n_file(code)
+
+        #
+        move_srts(code)
+        self.complete("Finished processing language pack %s" % code)
 
 def get_language_pack(code, software_version):
     """Download language pack for specified language"""
 
     logging.info("Retrieving language pack: %s" % code)
-    request_url = "http://%s/static/language_packs/%s/%s.zip" % (settings.CENTRAL_SERVER_HOST, software_version, code)
+    request_url = _language_pack_url(code, software_version)
     r = requests.get(request_url)
     try:
         r.raise_for_status()
@@ -73,12 +95,15 @@ def get_language_pack(code, software_version):
 
     return r.content
 
+def _language_pack_url(code, software_version):
+    return "http://%s/static/language_packs/%s/%s.zip" % (settings.CENTRAL_SERVER_HOST, software_version, code)
+
 def unpack_language(code, zip_file):
     """Unpack zipped language pack into locale directory"""
 
     logging.info("Unpacking new translations")
     ensure_dir(os.path.join(LOCALE_ROOT, code, "LC_MESSAGES"))
-    
+
     ## Unpack into temp dir
     z = zipfile.ZipFile(StringIO(zip_file))
     z.extractall(os.path.join(LOCALE_ROOT, code))
@@ -90,10 +115,10 @@ def update_database(code):
     metadata = json.loads(open(os.path.join(LOCALE_ROOT, code, "%s_metadata.json" % code)).read())
 
     logging.info("Updating database for language pack: %s" % code)
-        
+
     pack, created = LanguagePack.objects.get_or_create(
-        code=code, 
-        name=metadata["name"], 
+        code=code,
+        name=metadata["name"],
         software_version=metadata["software_version"]
     )
 
@@ -103,16 +128,18 @@ def update_database(code):
 
     logging.info("Successfully updated database.")
 
+def move_srts(code):
+    """
+    Srts live in the locale directory, but that's not exposed at any URL.  So instead,
+    we have to move the srts out to /static/subtitles/[code]/
+    """
+    subtitles_static_dir = os.path.join(settings.STATIC_ROOT, "subtitles")
+    srt_static_dir = os.path.join(subtitles_static_dir, code)
+    srt_locale_dir = os.path.join(LOCALE_ROOT, code, "subtitles")
 
-def add_jsi18n_file(code):
-    output_dir = os.path.join(settings.STATIC_ROOT, "js", "i18n")
-    ensure_dir(output_dir)
-    output_file = os.path.join(output_dir, "%s.js" % code)
-
-    request = HttpRequest()
-    request.path = output_file
-    request.session = {'django_language': code}
-
-    response = javascript_catalog(request, packages=('ka-lite.locale',))
-    with open(output_file, "w") as fp:
-        fp.write(response.content)
+    ensure_dir(srt_static_dir)
+    for fil in glob.glob(os.path.join(srt_locale_dir, "*.srt")):
+        srt_dest_path = os.path.join(srt_static_dir, os.path.basename(fil))
+        if os.path.exists(srt_dest_path):
+            os.remove(srt_dest_path)
+        shutil.move(fil, srt_dest_path)

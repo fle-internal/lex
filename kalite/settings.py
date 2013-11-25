@@ -10,6 +10,21 @@ import time
 import uuid
 import version  # in danger of a circular import.  NEVER add settings stuff there--should all be hard-coded.
 
+
+##############################
+# Functions for querying settings
+##############################
+
+def package_selected(package_name):
+    global CONFIG_PACKAGE
+    return bool(CONFIG_PACKAGE) and bool(package_name) and package_name.lower() in CONFIG_PACKAGE
+
+def user_facing_port():
+    global PROXY_PORT
+    global PRODUCTION_PORT
+    return PROXY_PORT or PRODUCTION_PORT
+
+
 ##############################
 # Basic setup (no options)
 ##############################
@@ -200,8 +215,9 @@ if CENTRAL_SERVER:
     CROWDIN_PROJECT_KEY     = getattr(local_settings, "CROWDIN_PROJECT_KEY", None)
 
 else:
+
     ROOT_URLCONF = "main.urls"
-    INSTALLED_APPS += ("updates",)
+    INSTALLED_APPS += ("i18n", "updates",)
     MIDDLEWARE_CLASSES += (
         "securesync.middleware.AuthFlags",  # this must come first in app-dependent middleware--many others depend on it.
         "securesync.middleware.FacilityCheck",
@@ -209,9 +225,9 @@ else:
         "securesync.middleware.DBCheck",
     )
 #    if USE_I18N:
-    MIDDLEWARE_CLASSES += ("i18n.middleware.SessionLanguage"),
+    TEMPLATE_CONTEXT_PROCESSORS += ("i18n.custom_context_processors.languages",)
+    MIDDLEWARE_CLASSES += ("i18n.middleware.SessionLanguage",)
     INSTALLED_APPS += ('i18n',)
-
 
 ########################
 # Debugging and testing
@@ -347,7 +363,7 @@ if not CENTRAL_SERVER:
     # Cache is activated in every case,
     #   EXCEPT: if CACHE_TIME=0
     if CACHE_TIME != 0:  # None can mean infinite caching to some functions
-        KEY_PREFIX = version.VERSION
+        KEY_PREFIX = version.VERSION_INFO[version.VERSION]["git_commit"][0:6]  # new cache for every build
 
         # File-based cache
         install_location_hash = hashlib.sha1(PROJECT_PATH).hexdigest()
@@ -482,11 +498,6 @@ CONFIG_PACKAGE = getattr(local_settings, "CONFIG_PACKAGE",
 if isinstance(CONFIG_PACKAGE, basestring):
     CONFIG_PACKAGE = [CONFIG_PACKAGE]
 CONFIG_PACKAGE = [cp.lower() for cp in CONFIG_PACKAGE]
-
-def package_selected(package_name):
-    global CONFIG_PACKAGE
-    return bool(CONFIG_PACKAGE) and bool(package_name) and package_name.lower() in CONFIG_PACKAGE
-
 
 # Config for Raspberry Pi distributed server
 if package_selected("RPi"):

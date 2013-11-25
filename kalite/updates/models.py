@@ -1,18 +1,20 @@
 import datetime
 
-from django.db import models
 from django.core.validators import MaxValueValidator, MinValueValidator
+from django.db import models
+from django.utils.translation import ugettext as _
 
 from settings import LOG as logging
+from utils.django_utils import ExtendedModel
 
 
-class UpdateProgressLog(models.Model):
+class UpdateProgressLog(ExtendedModel):
     """
     Gets progress
     """
-    process_name = models.CharField(verbose_name="process name", max_length=100)
+    process_name = models.CharField(verbose_name=_("process name"), max_length=100)
     process_percent = models.FloatField(validators=[MinValueValidator(0.0), MaxValueValidator(1.0)], default=0)
-    stage_name = models.CharField(verbose_name="stage name", max_length=100, null=True)
+    stage_name = models.CharField(verbose_name=_("stage name"), max_length=100, null=True)
     stage_percent = models.FloatField(validators=[MinValueValidator(0.0), MaxValueValidator(1.0)], default=0)
     current_stage = models.IntegerField(blank=True, null=True)
     total_stages = models.IntegerField(blank=True, null=True)
@@ -43,7 +45,7 @@ class UpdateProgressLog(models.Model):
     def restart(self):
         self.process_percent = 0
         self.stage_percent = 0
-        self.current_stage = None
+        self.current_stage = None  # 1 to len(stages)
         self.start_time = datetime.datetime.now()
         self.end_time = None
         self.completed = False
@@ -52,7 +54,7 @@ class UpdateProgressLog(models.Model):
     def update_stage(self, stage_name, stage_percent, notes=None):
         """
         Update a stage with it's percent, and process accordingly.
-        
+
         stage_percent should be between 0 and 1
         """
         assert 0. <= stage_percent <= 1., "stage percent must be between 0 and 1."
@@ -65,7 +67,7 @@ class UpdateProgressLog(models.Model):
             if self.stage_name:  # moving to the next stage
                 self.notes = None  # reset notes after each stage
                 self.current_stage += 1
-            else:
+            else: # just starting
                 self.current_stage = 1
             self.stage_name = stage_name
 
@@ -146,7 +148,7 @@ class UpdateProgressLog(models.Model):
         For a given query, return the most recently opened, non-closed log.
         """
         #assert not args, "no positional args allowed to this method."
-    
+
         if not force_new:
             logs = cls.objects.filter(end_time=None, completed=False, **kwargs).order_by("-start_time")
             if logs.count() > 0:
@@ -166,3 +168,30 @@ class UpdateProgressLog(models.Model):
         log = cls(**kwargs)
         log.save()
         return log
+
+
+class VideoFile(ExtendedModel):
+    """
+    Used exclusively for downloading files, and in conjunction with files on disk
+    to determine what videos are available to users.
+    """
+    youtube_id = models.CharField(max_length=20, primary_key=True)
+    flagged_for_download = models.BooleanField(default=False)
+    download_in_progress = models.BooleanField(default=False)
+    priority = models.IntegerField(default=0)
+    percent_complete = models.IntegerField(default=0)
+    cancel_download = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["priority", "youtube_id"]
+
+    def __unicode__(self):
+        if self.download_in_progress:
+            status = "downloading (%d%%)" % self.percent_complete
+        elif self.flagged_for_download:
+            status = "waiting to download"
+        elif self.percent_complete == 100:
+            status = "downloaded"
+        else:
+            status = "not downloaded"
+        return u"id: %s (%s)" % (self.youtube_id, status)
