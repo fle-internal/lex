@@ -95,6 +95,7 @@ DATABASES      = getattr(local_settings, "DATABASES", {
 
 CONTENT_ROOT   = os.path.realpath(getattr(local_settings, "CONTENT_ROOT", PROJECT_PATH + "/../content/")) + "/"
 CONTENT_URL    = getattr(local_settings, "CONTENT_URL", "/content/")
+LOCAL_CONTENT_ROOT   = os.path.realpath(getattr(local_settings, "LOCAL_CONTENT_ROOT", PROJECT_PATH + "/../content/local_content/")) + "/"
 PASSWORD_CONSTRAINTS = getattr(local_settings, "PASSWORD_CONSTRAINTS", {'min_length': getattr(local_settings,
                                                                                               'PASSWORD_MIN_LENGTH',
                                                                                               6)})

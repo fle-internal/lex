@@ -40,6 +40,7 @@ content/*.png
 content/*.mp4
 content/*.json
 content/*.srt
+content/local_content/*
 kalite/static/srt/
 kalite/static/data/subtitles/
 kalite/media/

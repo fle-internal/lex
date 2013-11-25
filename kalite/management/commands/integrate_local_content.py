@@ -4,15 +4,18 @@ into the topic tree and content directory
 """
 
 import glob
+import json
 import ntpath
 import os 
+import shutil
 from optparse import make_option
 
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
+from kalite.utils.general import ensure_dir 
 from kalite.shared.topic_tools import get_topic_by_path
-from settings import LOG as logging
+from settings import LOG as logging, LOCAL_CONTENT_ROOT
 
 
 class Command(BaseCommand):
@@ -22,16 +25,25 @@ class Command(BaseCommand):
                     help='The full path of the base directory that contains the 3rd party content.'),
         make_option('-b', '--topic-path', action='store', dest='base_path', default=None,
                     help='Where this content should be inserted into the topic tree.'),
+        make_option('-C', '--copy-content', action='store_true', dest='copy_content', default=None,
+                    help='Copy any files found into the content/local_content/ directory so that they can be found by the system'),
+        make_option('-D', '--flush-local-content', action='store_true', dest='flush_content', default=None,
+                    help='For testing, delete the local_content directory first, before executing other commands.'),
     )
 
     def handle(self, *args, **options):
+        if options.get("flush_content") and os.path.exists(LOCAL_CONTENT_ROOT):
+            logging.info("Removing local content directory.") 
+            shutil.rmtree(LOCAL_CONTENT_ROOT)
+        
         location = options.get("location")
         base_path = options.get("base_path")
+        copy_content = options.get("copy_content")
         logging.info("Verifying that all arguments are valid.")
         verify_options(location, base_path)
 
         logging.info("Mapping file hierarchy to JSON")
-        topics_blob = map_file_hierarchy(location, base_path)
+        map_file_hierarchy(location, base_path, copy_content)
 
 
 def verify_options(location, base_path):
@@ -46,41 +58,52 @@ def verify_options(location, base_path):
 
     # Base path must be valid
     if not get_topic_by_path(base_path):
-        raise CommandError("The base path:'%s' does not exist in topics.json. Please enter a valid base path.")
+        raise CommandError("The base path:'%s' does not exist in topics.json. Please enter a valid base path. (Hint: don't forget the closing slash! e.g. /math/" % base_path)
 
 
-def map_file_hierarchy(location, base_path):
+def map_file_hierarchy(location, base_path, copy_content):
     """Traverse the directory location and generate JSON hierarchy from it"""
     # Create base entry
     master_blob = {
         "id": "master",
-        "children": get_children(location),
+        "path": base_path,
+        "children": get_children(location, base_path, copy_content),
     }
+    print json.dumps(master_blob, indent=4)
     return master_blob
 
-def get_children(location):
+
+def get_children(location, base_path, copy_content):
     """Return list of dictionaries of subdirectories and/or files in the location"""
     # Recursively add all subdirectories
     children = []
     for directory in glob.glob(os.path.join(location, "*/")):
+        current_path = os.path.join(base_path, path_leaf(directory))
         children.append({
-                "id": path_leaf(directory),
-                "type": "subdirectory",
-                "children": get_children(directory), # a list of the subdirectories or movies inside that directory
-            })
+            "path": current_path, 
+            "id": path_leaf(directory),  
+            "children": get_children(directory, current_path, copy_content), 
+        })
 
     # Add all files
     for filename in glob.glob(os.path.join(location, "*.*")):
         children.append({
-                "id": path_leaf(filename),
-                "type": "video",
-            })
+            "id": path_leaf(filename),
+            "path": os.path.join(base_path, path_leaf(filename)),
+            "parent_id": path_leaf(path=base_path),
+            "type": "video",
+        })
+
+        if copy_content:
+            ensure_dir(LOCAL_CONTENT_ROOT)
+            shutil.copy(filename, LOCAL_CONTENT_ROOT)
+            logging.info("Copied file %s to local content directory." % path_leaf(filename))
 
     return children
 
 
 # Thanks: http://stackoverflow.com/a/8384788
-def path_leaf(path):
-    """Return the name of the current directory of the filepath"""
+def path_leaf(path, head=True):
+    """Return the name of the current directory of the filepath, or the parent"""
     head, tail = ntpath.split(path)
     return tail or ntpath.basename(head)
