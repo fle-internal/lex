@@ -95,6 +95,7 @@ DATABASES      = getattr(local_settings, "DATABASES", {
 
 CONTENT_ROOT   = os.path.realpath(getattr(local_settings, "CONTENT_ROOT", PROJECT_PATH + "/../content/")) + "/"
 CONTENT_URL    = getattr(local_settings, "CONTENT_URL", "/content/")
+LOCAL_CONTENT_ROOT   = os.path.realpath(getattr(local_settings, "LOCAL_CONTENT_ROOT", PROJECT_PATH + "/../content/local_content/")) + "/"
 PASSWORD_CONSTRAINTS = getattr(local_settings, "PASSWORD_CONSTRAINTS", {'min_length': getattr(local_settings,
                                                                                               'PASSWORD_MIN_LENGTH',
                                                                                               6)})
@@ -134,6 +135,7 @@ STATIC_ROOT    = os.path.realpath(getattr(local_settings, "STATIC_ROOT", PROJECT
 
 # Other defined paths
 DATA_PATH      = os.path.realpath(getattr(local_settings, "DATA_PATH", PROJECT_PATH + "/static/data/")) + "/"
+EXTRA_TOPICS_PATH = os.path.realpath(getattr(local_settings, "EXTRA_TOPICS_PATH", PROJECT_PATH + "/static/data/extra_topics/")) + "/"
 SUBTITLES_DATA_ROOT = os.path.realpath(getattr(local_settings, "SUBTITLES_DATA_ROOT", DATA_PATH + "subtitles/")) + "/"
 LANGUAGE_PACK_ROOT = os.path.realpath(getattr(local_settings, "LANGUAGE_PACK_ROOT", STATIC_ROOT + "language_packs/")) + "/"
 
