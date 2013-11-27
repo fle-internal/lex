@@ -84,7 +84,8 @@ def map_file_hierarchy(location, base_path, copy_content, file_name):
         "children": get_children(location, base_path, copy_content),
     }
 
-    write_location = os.path.join(settings.DATA_PATH, file_name)
+    ensure_dir(settings.EXTRA_TOPICS_PATH)
+    write_location = os.path.join(settings.EXTRA_TOPICS_PATH, file_name)
     with open(write_location, "w") as dumpsite:
         logging.info("Writing output to %s" % write_location)
         json.dump(master_blob, dumpsite, indent=4)

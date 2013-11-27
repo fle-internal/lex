@@ -1,14 +1,14 @@
 # Understanding the Topic Tree 
 ## (or: how to hack together a local content injection!)
 
-El topic tree. It's the lifeblood of KA Lite. It is one _big_ json file (located: `static/data/topics.json`) that holds the key to the hierarchical relationships between topics, videos, and exercises, and also contains metadata on each entry. 
+El topic tree. It's the lifeblood of KA Lite. It is one _big_ json file (located: `static/data/topics.json`) that holds the key to the hierarchical relationships between topics, videos, and exercises, and also contains metadata on for each. 
 
 
 ## Topic Tree Structure
 
 In order to begin the process of modifying KA Lite to accept non-KA content, we first must understand how the topic tree is structured. 
 
-Three import types of "nodes": Topic, Video, Exercise
+Three import types of "nodes" (which are dictionaries of meta-data): __Topic, Video, and Exercise__. Topics (e.g. Math) have "children" which are more nodes. What follows is a breakdown of the meta data in each node.
 
 ## Topic node 
 ### Contains the following meta: 
@@ -92,7 +92,7 @@ Three import types of "nodes": Topic, Video, Exercise
     "addition-subtraction", 
     "basic_addition"
   "description": "Introduction to addition. Multiple visual ways to represent addition.", # optional desc.
-  "path": "/math/arithmetic/addition-subtraction/basic_addition/v/basic-addition/", # full internal path
+  "path": "/math/arithmetic/addition-subtraction/basic_addition/v/basic-addition/", # Note the 'v'
   "slug": "basic-addition", # url friendly unique id
   "kind": "Video", # obvi
   "keywords": "Math, Addition, Khan, Academy, CC_1_OA_1, CC_1_OA_2, CC_1_OA_3, CC_1_OA_6", # optional
@@ -107,7 +107,7 @@ Three import types of "nodes": Topic, Video, Exercise
 ```
 {
   "v_position": -1, # ??
-  "path": "/math/arithmetic/addition-subtraction/basic_addition/e/addition_1/", # topic tree path
+  "path": "/math/arithmetic/addition-subtraction/basic_addition/e/addition_1/", # Note the 'e'
   "id": "addition_1", # unique id
   "display_name": "1-digit addition", # to be displayed 
   "title": "1-digit addition", # not sure the difference between this and display name
@@ -135,32 +135,232 @@ Three import types of "nodes": Topic, Video, Exercise
 },
 ```
 
-## Now, what meta is __truly__ important?
-### For our purposes:
+## Now that we know the basic structure, how is it being used? Assuming that's the important stuff, how do we insert it?
 
-#### Meta that __topics__ need:
+Files involved:
+
+* `topics.json # the actual topic tree data file`
+* `topic_tools.py # Important constants and helpful functions for topic tree` 
+* `main/views.py > splat_handler(request, splat) # Filters requests of the topic tree`
+
+So basically, a url is requested, get's plugged into `splat_handler`, which utilizes the topic tree structure to spit out the correct page. To know how we should insert data into the topic tree, we need to first know how `splat_handler` uses the data (marked up below)
+
+```
+def splat_handler(request, splat):
+    slugs = filter(lambda x: x, splat.split("/")) # parses the url that has been passes
+    current_node = topicdata.TOPICS # topic_tools.get_topic_tree() which returns the entire topic tree as a dictionary
+    seeking = "Topic" # search for topics, until we find videos or exercise
+    for slug in slugs:
+        # towards the end of the url, we switch from seeking a topic node
+        #   to the particular type of node in the tree
+        # kind_slugs = hardcoded list of kinds: kind_slugs = {"Video": "v/", "Exercise": "e/", "Topic": ""}
+        # an /e/ in url says "look for exercise" and a /v/ says "look for video". 
+        # No e or v? We're looking for a topic.
+        for kind, kind_slug in topic_tools.kind_slugs.items(): 
+            if slug == kind_slug.split("/")[0]:
+                seeking = kind
+                break
+
+        # match each step in the topics hierarchy, with the url slug.
+        else:
+            # build up a list of all children of the same kind
+            children = [child for child in current_node['children'] if child['kind'] == seeking]
+            if not children:
+                raise Http404
+            match = None
+            prev = None
+            next = None
+            # Iterates through them, simply looking for a slug match -- slugs are important!
+            for child in children:
+                if match:
+                    next = child
+                    break
+                if child["slug"] == slug:
+                    match = child
+                else:
+                    prev = child
+            if not match:
+                raise Http404
+            current_node = match
+            # to be continued... 
+```
+if it finds the match, it sends it to it's respective handlers. Let's take a closer look at these handlers to know what 
+else, beyond slugs, is important
+```
+    # continued from above: 
+    if current_node["kind"] == "Topic":
+        return topic_handler(request, current_node)
+    elif current_node["kind"] == "Video":
+        return video_handler(request, video=current_node, prev=prev, next=next)
+    elif current_node["kind"] == "Exercise":
+        return exercise_handler(request, current_node)
+    else:
+        raise Http404
+```
+
+### If we match a topic it gets handled by `topic_handler`
+
+```
+# just rendering to the `topic.html` template and returning the result of the `topic_context` function! Let's look there
+@backend_cache_page
+@render_to("topic.html")
+def topic_handler(request, topic):
+    return topic_context(topic)
+
+def topic_context(topic):
+    """
+    Given a topic node, create all context related to showing that topic
+    in a template.
+    """
+    # Returning the top level videos, exercises, and topics
+    # Given a topic node, returns all video node children (non-recursively)
+    videos    = topic_tools.get_videos(topic)
+    # Given a topic node, returns all exercise node children (non-recursively)
+    exercises = topic_tools.get_exercises(topic) # NOTE: 'live' is important
+    # Given a topic node, returns all children that are not hidden and contain at least one video (non-recursively)
+    topics    = topic_tools.get_live_topics(topic) # NOTE: 'hide' is important
+
+    # Get video counts if they'll be used, on-demand only.
+    # Check in this order so that the initial counts are always updated
+    # video_counts_need_update: Compare current state to global state variables to check whether video counts need updating.
+    # get_video_counts: Uses the (json) topic tree to query the django database for which video files exist
+    if video_counts_need_update() or not 'nvideos_local' in topic:
+        (topic,_,_) = get_video_counts(topic=topic, videos_path=settings.CONTENT_ROOT)
+
+    my_topics = [dict((k, t[k]) for k in ('title', 'path', 'nvideos_local', 'nvideos_known')) for t in topics]
+
+    context = {
+        "topic": topic,
+        "title": topic["title"],
+        "description": re.sub(r'<[^>]*?>', '', topic["description"] or ""),
+        "videos": videos,
+        "exercises": exercises,
+        "topics": my_topics,
+        "backup_vids_available": bool(settings.BACKUP_VIDEO_SOURCE),
+    }
+    return context
+```
+
+#### Based on the above functions, topics nodes need the following meta in the topic tree:
+- slug
+- kind
+- children
+- title
+- description
+- hide
+
+(and we should likely also store the following):
+
 - path
 - id
-- hide (implicitly false -- this is only true ONCE in this whole json file)
-- title (for now = ID)
 - contains 
-- children (obviously)
 - parent_id
 - ancestor_ids 
 - node_slug
-- kind
 - topic_page_url
 - extended_slug
-- slug
 
-Everything else can be added later if necessary. 
+(we knowingly won't be storing the following for now):
+- icon_src
+- in_knowledge_map  
+- x_pos 
+- y_pos
 
-#### Meta that __videos__ need:
-- id
+
+### If we match a video it gets handled by `video_handler`
+```
+@backend_cache_page
+@render_to("video.html")
+def video_handler(request, video, format="mp4", prev=None, next=None):
+
+    video_on_disk = is_video_on_disk(video['youtube_id']) # Checks if it's in the content dir
+    video_exists = video_on_disk or bool(settings.BACKUP_VIDEO_SOURCE)
+
+    if not video_exists:
+        if request.is_admin:
+            # TODO(bcipolli): add a link, with querystring args that auto-checks this video in the topic tree
+            messages.warning(request, _("This video was not found! You can download it by going to the Update page."))
+        elif request.is_logged_in:
+            messages.warning(request, _("This video was not found! Please contact your teacher or an admin to have it downloaded."))
+        elif not request.is_logged_in:
+            messages.warning(request, _("This video was not found! You must login as an admin/teacher to download the video."))
+
+    video["stream_type"] = "video/%s" % format
+
+    if video_exists and not video_on_disk:
+        messages.success(request, "Got video content from %s" % video["stream_url"])
+
+    context = {
+        "video": video,
+        "title": video["title"],
+        "prev": prev,
+        "next": next,
+        "backup_vids_available": bool(settings.BACKUP_VIDEO_SOURCE),
+        "use_mplayer": settings.USE_MPLAYER and is_loopback_connection(request),
+    }
+    return context
+```
+
+#### Based on the above functions, topics nodes need the following meta in the topic tree:
+- youtube_id
 - title
-- parent_id 
-- ancestor_ids
+
+(and we should likely also store the following):
+
 - path
+- id
 - slug
-- kind
+- parent_id
+- ancestor_ids
+- kind  
+
+(we knowingly won't be storing the following for now):
+- duration
+- related_exercise
+- download_urls
+- keywords
 - readable_id
+- description 
+
+
+### If we match a exercise it gets handled by `exercise_handler`
+```
+@backend_cache_page
+@render_to("exercise.html")
+def exercise_handler(request, exercise):
+    """
+    Display an exercise
+    """
+    # Find related videos
+    related_videos = {}
+    for slug in exercise["related_video_slugs"]:
+        video_nodes = topicdata.NODE_CACHE["Video"].get(topicdata.SLUG2ID_MAP.get(slug), None)
+
+        # Make sure the IDs are recognized, and are available.
+        if not video_nodes:
+            continue
+        if not video_nodes[0].get("on_disk", False) and not settings.BACKUP_VIDEO_SOURCE:
+            continue
+
+        # Search for a sibling video node to add to related exercises.
+        for video in video_nodes:
+            if topic_tools.is_sibling({"path": video["path"], "kind": "Video"}, exercise):
+                related_videos[slug] = video
+                break
+
+        # failed to find a sibling; just choose the first one.
+        if slug not in related_videos:
+            related_videos[slug] = video_nodes[0]
+
+    context = {
+        "exercise": exercise,
+        "title": exercise["title"],
+        "exercise_template": "exercises/" + exercise["slug"] + ".html",
+        "related_videos": related_videos.values(),
+    }
+    return context
+```
+
+#### Based on the above functions, exercise nodes need the following meta in the topic tree:
+(we aren't going to be storing anything related to exercises right now, so leaving this to be filled in later.)
+
