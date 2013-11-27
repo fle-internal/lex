@@ -5,6 +5,7 @@ General string, integer, date functions.
 """
 import datetime
 import logging
+import ntpath
 import requests
 import os
 
@@ -221,3 +222,30 @@ def make_request(headers, url, max_retries=5):
         except Exception as e:
             logging.warn("Error downloading %s: %s" % (url, e))
     return r
+
+
+# Thanks: http://stackoverflow.com/a/8384788
+def path_leaf(path, head=True):
+    """Return the name of the current directory of the filepath, or the parent"""
+    head, tail = ntpath.split(path)
+    return tail or ntpath.basename(head)
+
+
+def get_file_type_by_extension(filename):
+    """Return filetype by the extension or empty string if it is not located in the lookup dictionary"""
+    # Hardcoded file types
+    file_types_dictionary = {
+        "video": ["mp4", "mov", "3gp", "amv", "asf", "asx", "avi", "mpg", "swf", "wmv"],
+        "audio": ["mp3", "wma", "wav", "mid", "ogg"],
+        "document": ["pdf", "txt", "rtf", "html", "xml"],
+    }
+
+    extension = filename.split(".")[1].lower()
+    if extension in file_types_dictionary["video"]:
+        return "video"
+    elif extension in file_types_dictionary["audio"]:
+        return "audio" 
+    elif extension in file_types_dictionary["document"]:
+        return "document"
+    else:
+        return ""
