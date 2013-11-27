@@ -13,7 +13,7 @@ from slugify import slugify
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
-from kalite.utils.general import ensure_dir, path_leaf, get_file_type_by_extension 
+from kalite.utils.general import ensure_dir, path_leaf, get_file_type_by_extension, slugify_path
 from kalite.shared.topic_tools import get_topic_by_path
 from settings import LOG as logging, LOCAL_CONTENT_ROOT
 
@@ -148,11 +148,3 @@ def get_children(location, base_path, copy_content):
             shutil.copy(filepath, os.path.join(LOCAL_CONTENT_ROOT, normalized_filename))
             logging.info("Copied file %s to local content directory." % os.path.basename(filepath))
     return children  
-
-
-def slugify_path(path):
-    slugified = []
-    for slug in path.split("/"):
-        slugified.append(slugify(slug))
-    slugified = os.path.join("/", *slugified)
-    return slugified

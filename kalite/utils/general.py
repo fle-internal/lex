@@ -8,6 +8,7 @@ import logging
 import ntpath
 import requests
 import os
+from slugify import slugify
 
 
 class InvalidDateFormat(Exception):
@@ -249,3 +250,11 @@ def get_file_type_by_extension(filename):
         return "Document"
     else:
         return ""
+
+
+def slugify_path(path):
+    slugified = []
+    for slug in path.split("/"):
+        slugified.append(slugify(slug))
+    slugified = os.path.join("/", *slugified)
+    return slugified
