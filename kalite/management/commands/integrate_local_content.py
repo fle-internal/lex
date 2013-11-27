@@ -8,6 +8,7 @@ import json
 import os 
 import shutil
 from optparse import make_option
+from slugify import slugify
 
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
@@ -27,9 +28,11 @@ class Command(BaseCommand):
         make_option('-f', '--file-name', action='store', dest='file_name', default=None,
                     help='The name of the file to write as a sibling to topics.json'),
         make_option('-C', '--copy-content', action='store_true', dest='copy_content', default=None,
-                    help='Copy any files found into the content/local_content/ directory so that they can be found by the system'),
+                    help='Copy any files found into the content/local_content/ directory so that \
+                    they can be found by the system'),
         make_option('-D', '--flush-local-content', action='store_true', dest='flush_content', default=None,
-                    help='For testing, delete the local_content directory first, before executing other commands.'),
+                    help='For testing, delete the local_content directory first, \
+                    before executing other commands.'),
     )
 
     def handle(self, *args, **options):
@@ -62,11 +65,13 @@ def verify_options(**options):
     
     # Location must be valid
     if not os.path.exists(location):
-        raise CommandError("The location given:'%s' does not exist on your computer. Please enter a valid directory." % location)
+        raise CommandError("The location given:'%s' does not exist on your computer. \
+        Please enter a valid directory." % location)
 
     # Base path must be valid
     if not get_topic_by_path(base_path):
-        raise CommandError("The base path:'%s' does not exist in topics.json. Please enter a valid base path. (Hint: don't forget the closing slash! e.g. /math/" % base_path)
+        raise CommandError("The base path:'%s' does not exist in topics.json. \
+        Please enter a valid base path. (Hint: don't forget the closing slash! e.g. /math/" % base_path)
 
     # File name must be unique
     if os.path.exists(os.path.join(settings.DATA_PATH, file_name)):
@@ -95,31 +100,57 @@ def get_children(location, base_path, copy_content):
     """Return list of dictionaries of subdirectories and/or files in the location"""
     # Recursively add all subdirectories
     children = []
-    for directory in glob.glob(os.path.join(location, "*/")):
-        current_path = os.path.join(base_path, path_leaf(directory))
+    slugified_base_path = slugify_path(base_path)
+    for dirpath in glob.glob(os.path.join(location, "*/")):
+        dirname = path_leaf(dirpath)
+        topic_slug = slugify(dirname)
+        current_path = os.path.join(slugified_base_path, topic_slug)
         children.append({
+            "kind": "Topic",
             "path": current_path, 
-            "id": path_leaf(directory),  
-            "children": get_children(directory, current_path, copy_content), 
+            "id": topic_slug, 
+            "title": dirname, 
+            "slug": topic_slug,
+            "node_slug": topic_slug,
+            "parent_id": os.path.basename(slugified_base_path),
+            "ancestor_ids": filter(None, slugified_base_path.split("/")),
+            "topic_page_url": current_path, 
+            "extended_slug": current_path.strip("/"),
+            "hide": False, 
+            "children": get_children(dirpath, current_path, copy_content), 
         })
 
     # Add all files
     for filepath in glob.glob(os.path.join(location, "*.*")):
-        filename = os.path.basename(filepath)
-        file_type = get_file_type_by_extension(filename)
+        full_filename = os.path.basename(filepath)
+        file_type = get_file_type_by_extension(full_filename)
         if not file_type:
-            raise CommandError("Can't tell what type of file this is by the extension '%s'. Please add to lookup dictionary and re-run command." % filename)
+            raise CommandError("Can't tell what type of file this is by the extension \
+                    '%s'. Please add to lookup dictionary and re-run command." % full_filename)
         
+        filename = os.path.splitext(full_filename)[0]
+        file_slug = slugify(filename)
         children.append({
-            "id": os.path.splitext(filename)[0],
-            "path": os.path.join(base_path, filename),
-            "parent_id": os.path.basename(base_path),
-            "type": file_type,
+            "youtube_id": file_slug, 
+            "id": file_slug,
+            "title": filename,
+            "path": os.path.join(slugified_base_path, file_slug),
+            "ancestor_ids": filter(None, slugified_base_path.split("/")),
+            "slug": file_slug,
+            "parent_id": os.path.basename(slugified_base_path),
+            "kind": file_type,
         })
 
         if copy_content:
             ensure_dir(LOCAL_CONTENT_ROOT)
-            shutil.copy(filename, LOCAL_CONTENT_ROOT)
-            logging.info("Copied file %s to local content directory." % os.path.basename(filename))
+            shutil.copy(full_filename, LOCAL_CONTENT_ROOT)
+            logging.info("Copied file %s to local content directory." % os.path.basename(full_filename))
+    return children  
 
-    return children
+
+def slugify_path(path):
+    slugified = []
+    for slug in path.split("/"):
+        slugified.append(slugify(slug))
+    slugified = os.path.join("/", *slugified)
+    return slugified

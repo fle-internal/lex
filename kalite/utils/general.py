@@ -242,10 +242,10 @@ def get_file_type_by_extension(filename):
 
     extension = filename.split(".")[1].lower()
     if extension in file_types_dictionary["video"]:
-        return "video"
+        return "Video"
     elif extension in file_types_dictionary["audio"]:
-        return "audio" 
+        return "Audio" 
     elif extension in file_types_dictionary["document"]:
-        return "document"
+        return "Document"
     else:
         return ""
