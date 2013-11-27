@@ -129,6 +129,7 @@ def get_children(location, base_path, copy_content):
                     '%s'. Please add to lookup dictionary and re-run command." % full_filename)
         
         filename = os.path.splitext(full_filename)[0]
+        extension = os.path.splitext(full_filename)[1].lower()
         file_slug = slugify(filename)
         children.append({
             "youtube_id": file_slug, 
@@ -143,8 +144,9 @@ def get_children(location, base_path, copy_content):
 
         if copy_content:
             ensure_dir(LOCAL_CONTENT_ROOT)
-            shutil.copy(full_filename, LOCAL_CONTENT_ROOT)
-            logging.info("Copied file %s to local content directory." % os.path.basename(full_filename))
+            normalized_filename = "%s%s" % (file_slug, extension)
+            shutil.copy(filepath, os.path.join(LOCAL_CONTENT_ROOT, normalized_filename))
+            logging.info("Copied file %s to local content directory." % os.path.basename(filepath))
     return children  
 
 
