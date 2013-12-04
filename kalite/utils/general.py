@@ -8,6 +8,7 @@ import logging
 import ntpath
 import requests
 import os
+from copy import deepcopy
 from slugify import slugify
 
 
@@ -258,3 +259,18 @@ def slugify_path(path):
         slugified.append(slugify(slug))
     slugified = os.path.join("/", *slugified)
     return slugified
+
+# Thanks: http://www.xormedia.com/recursively-merge-dictionaries-in-python/
+def dict_merge(a, b):
+    """recursively merges dict's. not just simple a['key'] = b['key'], if
+    both a and bhave a key who's value is a dict then dict_merge is called
+    on both values and the result stored in the returned dictionary."""
+    if not isinstance(b, dict):
+        return b
+    result = deepcopy(a)
+    for k, v in b.iteritems():
+        if k in result and isinstance(result[k], dict):
+                result[k] = dict_merge(result[k], v)
+        else:
+            result[k] = deepcopy(v)
+    return result

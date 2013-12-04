@@ -1,12 +1,13 @@
 """
 Command to integrate 3rd party (non-Khan Academy) content
-into the topic tree and content directory
+into the topic tree and content directory. 
 """
 
 import glob
 import json
 import os 
 import shutil
+from functools import partial
 from optparse import make_option
 from slugify import slugify
 
@@ -14,13 +15,13 @@ from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
 import settings
-from kalite.utils.general import ensure_dir, path_leaf, get_file_type_by_extension, slugify_path
+from kalite.utils.general import ensure_dir, path_leaf, get_file_type_by_extension, slugify_path, dict_merge
 from kalite.shared.topic_tools import get_topic_by_path, topics_file, get_topic_tree, get_all_leaves
-from settings import LOG as logging, LOCAL_CONTENT_ROOT, LOCAL_CONTENT_PATH
+from settings import LOG as logging, LOCAL_CONTENT_ROOT, LOCAL_CONTENT_DATA_PATH
 
 
 class Command(BaseCommand):
-    help = "Inegrate 3rd party content into KA Lite.\nUSAGE:\n  combine -l, -b, -f to map and copy content into the system.\n  use -d and -f to remove local content"
+    help = "Inegrate 3rd party content into KA Lite.\nUSAGE:\n  combine -l, -f to map and copy content into the system.\n use -d and -f to remove local content"
 
     option_list = BaseCommand.option_list + (
         make_option('-l', '--directory-location', action='store', dest='location', default=None,
@@ -158,8 +159,8 @@ def add_content(location, base_path, file_name):
     nodes = get_children(location, base_path)
 
     # Write it to JSON
-    ensure_dir(settings.LOCAL_CONTENT_PATH)
-    write_location = os.path.join(settings.LOCAL_CONTENT_PATH, file_name)
+    ensure_dir(settings.LOCAL_CONTENT_DATA_PATH)
+    write_location = os.path.join(settings.LOCAL_CONTENT_DATA_PATH, file_name)
     with open(write_location, "w") as dumpsite:
         json.dump(nodes, dumpsite, indent=4)
     logging.info("Wrote output to %s" % write_location)
@@ -178,33 +179,43 @@ def inject_topic_tree(local_content, base_path):
         topic_tree["children"] += local_content
         logging.debug("Inserted content at the root of the topic tree")
     else:
-        raise CommandError("Dylan hasn't coded this yet, chill.")
-    #     # split into parts (remove trailing slash first)
-    #     parts = base_path[len(topic_tree["path"]):-1].split("/")
-    #     for part in parts:
-    #         cur_node = filter(partial(lambda n, p: n["slug"] == p, p=part), cur_node["children"])
-    #         if cur_node:
-    #             cur_node = cur_node[0]
-    #         else:
-    #             break
+        # split into parts (remove trailing slash first)
+        parts = base_path[len(topic_tree["path"]):-1].split("/")
+        for part in parts:
+            parent_node = filter(partial(lambda n, p: n["slug"] == p, p=part), topic_tree["children"])[0]
+            parent_node["children"] += local_content
+            topic_tree = dict_merge(topic_tree, parent_node) # this doesn't work
 
     with open(topic_file_path, 'w') as f:
         json.dump(topic_tree, f)
     logging.info("Rewrote topic tree: %s" % topic_file_path)
 
 
-def remove_content(file_name):
-    """
-    Remove content from the system by deleting the mapping,
-    deleting any content contained in the mapping from the content
-    directory, and restoring the topic_tree to it's former glory.
-    """
-    print "something"
-    # First, restore the topic tree
+# def remove_content(file_name):
+#     """
+#     Remove content from the system by deleting the mapping,
+#     deleting any content contained in the mapping from the content
+#     directory, and restoring the topic_tree to it's former glory.
+#     """
+#     if not os.path.exists(settings.LOCAL_CONTENT_DATA_PATH, file_name):
+#         raise CommandError("Invalid name for local_content. File must exist inside ka-lite/data/local_content/")
+#     with open(os.path.join(settings.LOCAL_CONTENT_DATA_PATH, file_name)) as f:
+#         local_content = json.load(f)
+    
+#     def restore_topic_tree(local_content):
+#         """Remove local_content from topics.json"""
+#         topic_tree = get_topic_tree()
+#         ## TODO topic_tree.deepsubtract(local_content)
+#         with open(os.path.join(settings.DATA_PATH, topics_file), 'w') as f:
+#             json.dump(topic_tree, f)
 
-    # Second, delete local content based on mapping
+#     restore_topic_tree(local_content)
+
+#     # Second, delete local content based on mapping
+#     def delete_local_content(local_content):
+#         """Remove local content videos from content directory"""
+#         videos = get_all_leaves(local_content, "Video")
+#         for v in videos:
 
     # Finally delete the mapping
-
-
-# Dylan (TODO after Aschkan): write the inject_topic_tree function; write the remove_content function
+    
