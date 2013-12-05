@@ -6,6 +6,7 @@ General string, integer, date functions.
 import datetime
 import logging
 import ntpath
+import re
 import requests
 import os
 from copy import deepcopy
@@ -225,32 +226,25 @@ def make_request(headers, url, max_retries=5):
             logging.warn("Error downloading %s: %s" % (url, e))
     return r
 
-
-# Thanks: http://stackoverflow.com/a/8384788
-def path_leaf(path, head=True):
-    """Return the name of the current directory of the filepath, or the parent"""
-    head, tail = ntpath.split(path)
-    return tail or ntpath.basename(head)
-
-
-def get_file_type_by_extension(filename):
+def get_kind_by_extension(filename):
     """Return filetype by the extension or empty string if it is not located in the lookup dictionary"""
     # Hardcoded file types
-    file_types_dictionary = {
-        "video": ["mp4", "mov", "3gp", "amv", "asf", "asx", "avi", "mpg", "swf", "wmv"],
-        "audio": ["mp3", "wma", "wav", "mid", "ogg"],
-        "document": ["pdf", "txt", "rtf", "html", "xml"],
+    file_kind_dictionary = {
+        "Video": ["mp4", "mov", "3gp", "amv", "asf", "asx", "avi", "mpg", "swf", "wmv"],
+        "Audio": ["mp3", "wma", "wav", "mid", "ogg"],
+        "Document": ["pdf", "txt", "rtf", "html", "xml"],
     }
 
     extension = filename.split(".")[1].lower()
-    if extension in file_types_dictionary["video"]:
+    if extension in file_kind_dictionary["Video"]:
         return "Video"
-    elif extension in file_types_dictionary["audio"]:
+    elif extension in file_kind_dictionary["Audio"]:
         return "Audio" 
-    elif extension in file_types_dictionary["document"]:
+    elif extension in file_kind_dictionary["Document"]:
         return "Document"
     else:
-        return ""
+        raise CommandError("Can't tell what type of file '%s' is by the extension \
+            '%s'. Please add to lookup dictionary and re-run command." % (filename, extension))
 
 
 def slugify_path(path):
@@ -260,17 +254,9 @@ def slugify_path(path):
     slugified = os.path.join("/", *slugified)
     return slugified
 
-# Thanks: http://www.xormedia.com/recursively-merge-dictionaries-in-python/
-def dict_merge(a, b):
-    """recursively merges dict's. not just simple a['key'] = b['key'], if
-    both a and bhave a key who's value is a dict then dict_merge is called
-    on both values and the result stored in the returned dictionary."""
-    if not isinstance(b, dict):
-        return b
-    result = deepcopy(a)
-    for k, v in b.iteritems():
-        if k in result and isinstance(result[k], dict):
-                result[k] = dict_merge(result[k], v)
-        else:
-            result[k] = deepcopy(v)
-    return result
+
+def humanize_name(filename):
+    """Return human readable string from filename, by replacing:
+        - and _ with space
+    """
+    return re.sub('[-_]', ' ', filename)

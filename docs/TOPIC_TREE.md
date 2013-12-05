@@ -254,17 +254,18 @@ def topic_context(topic):
 - id
 - parent_id
 - ancestor_ids 
+- description # empty string
+- contains 
+
+(we knowingly won't be storing the following for now):
 - node_slug
 - topic_page_url
 - extended_slug
-
-(we knowingly won't be storing the following for now):
-- description
 - icon_src
 - in_knowledge_map  
 - x_pos 
 - y_pos
-- contains 
+
 
 
 ### If we match a video it gets handled by `video_handler`

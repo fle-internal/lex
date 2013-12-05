@@ -15,8 +15,8 @@ from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
 import settings
-from kalite.utils.general import ensure_dir, path_leaf, get_file_type_by_extension, slugify_path, dict_merge
-from kalite.shared.topic_tools import get_topic_by_path, topics_file, get_topic_tree, get_all_leaves
+from kalite.utils.general import ensure_dir, get_kind_by_extension, humanize_name
+from kalite.shared.topic_tools import get_topic_by_path, topics_file, get_topic_tree, get_all_leaves, get_path2node_map
 from settings import LOG as logging, LOCAL_CONTENT_ROOT, LOCAL_CONTENT_DATA_PATH
 
 
@@ -32,11 +32,17 @@ class Command(BaseCommand):
                     help='The name of the file to write as a sibling to topics.json'),
         make_option('-d', '--delete-local-content', action='store_true', dest='flush_content', default=None,
                     help='For testing, delete the local_content directory first, before executing other commands.'),
+        make_option('-R', '--restore', action='store_true', dest='restore', default=None,
+                    help='For testing, restore topics.json to it\'s original state.'),
     )
 
     def handle(self, *args, **options):
+        if options.get("restore"):
+            restore()
         location = options.get("location")
-        base_path = options.get("base_path")
+        # append trailing slash to base_path if it's not there
+        base_path = options.get("base_path") if options.get("base_path")[-1] == "/" else options.get("base_path") + "/"
+        print base_path
         file_name = options.get("file_name")
         flush_content = options.get("flush_content")
 
@@ -50,8 +56,7 @@ class Command(BaseCommand):
             # Base path must be valid
             if not get_topic_by_path(base_path):
                 raise CommandError("The base path:'%s' does not exist in topics.json. \
-                    Please enter a valid base path. (Hint: don't forget the \
-                        closing slash! e.g. /math/" % base_path)
+                    Please enter a valid base path." % base_path)
             # File name must be unique
             if os.path.exists(os.path.join(settings.DATA_PATH, file_name)):
                 raise CommandError("The file name '%s' is taken. \
@@ -87,25 +92,21 @@ def add_content(location, base_path, file_name):
         """Return list of dictionaries of subdirectories and/or files in the location"""
         # Recursively add all subdirectories
         children = []
-        slugified_base_path = slugify_path(base_path)
 
         subdirectories = [os.path.join(location, s) for s in os.listdir(location) if os.path.isdir(os.path.join(location, s))]
         for dirpath in subdirectories:
-            dirname = path_leaf(dirpath)
-            topic_slug = slugify(dirname)
-            current_path = os.path.join(slugified_base_path, topic_slug)
+            base_name = os.path.basename(dirpath)
+            topic_slug = slugify(base_name)
+            current_path = os.path.join(base_path, topic_slug)
             children.append({
                 "kind": "Topic",
                 "path": current_path, 
                 "id": topic_slug, 
-                "title": dirname, 
+                "title": humanize_name(base_name), 
                 "slug": topic_slug,
-                "node_slug": topic_slug,
                 "description": "",
-                "parent_id": os.path.basename(slugified_base_path),
-                "ancestor_ids": filter(None, slugified_base_path.split("/")),
-                "topic_page_url": current_path, 
-                "extended_slug": current_path.strip("/"),
+                "parent_id": os.path.basename(base_path),
+                "ancestor_ids": filter(None, base_path.split("/")),
                 "contains": recurse_container(dirpath),
                 "hide": False, 
                 "children": get_children(dirpath, current_path), 
@@ -115,24 +116,22 @@ def add_content(location, base_path, file_name):
         files = [f for f in os.listdir(location) if os.path.isfile(os.path.join(location, f))]
         for filepath in files:
             full_filename = os.path.basename(filepath)
-            file_type = get_file_type_by_extension(full_filename)
-            if not file_type:
-                raise CommandError("Can't tell what type of file this is by the extension \
-                    '%s'. Please add to lookup dictionary and re-run command." % full_filename)
-            
+            kind = get_kind_by_extension(full_filename)
+            if kind is not "Video":
+                continue
+
             filename = os.path.splitext(full_filename)[0]
             extension = os.path.splitext(full_filename)[1].lower()
             file_slug = slugify(filename)
             children.append({
                 "youtube_id": file_slug, 
                 "id": file_slug,
-                "title": filename,
-                "path": os.path.join(slugified_base_path, file_slug),
-                "ancestor_ids": filter(None, slugified_base_path.split("/")),
+                "title": humanize_name(filename),
+                "path": os.path.join(base_path, file_slug),
+                "ancestor_ids": filter(None, base_path.split("/")),
                 "slug": file_slug,
-                "parent_id": os.path.basename(slugified_base_path),
-                "kind": file_type,
-                "is_local": True,
+                "parent_id": os.path.basename(base_path),
+                "kind": kind,
             })
 
             # Copy over content
@@ -174,17 +173,7 @@ def inject_topic_tree(local_content, base_path):
     topic_file_path = os.path.join(settings.DATA_PATH, topics_file)
     topic_tree = get_topic_tree()
 
-    # Inject self into topic tree
-    if base_path == topic_tree["path"]:
-        topic_tree["children"] += local_content
-        logging.debug("Inserted content at the root of the topic tree")
-    else:
-        # split into parts (remove trailing slash first)
-        parts = base_path[len(topic_tree["path"]):-1].split("/")
-        for part in parts:
-            parent_node = filter(partial(lambda n, p: n["slug"] == p, p=part), topic_tree["children"])[0]
-            parent_node["children"] += local_content
-            topic_tree = dict_merge(topic_tree, parent_node) # this doesn't work
+    get_path2node_map()
 
     with open(topic_file_path, 'w') as f:
         json.dump(topic_tree, f)
@@ -218,4 +207,8 @@ def inject_topic_tree(local_content, base_path):
 #         for v in videos:
 
     # Finally delete the mapping
-    
+
+
+def restore():
+    os.remove(os.path.join(settings.DATA_PATH, "topics.json"))
+    shutil.copy2(os.path.join(settings.DATA_PATH, "permtopics.json"), os.path.join(settings.DATA_PATH, "topics.json"))
