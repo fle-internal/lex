@@ -66,6 +66,12 @@ def get_flat_topic_tree(force=False):
         FLAT_TOPIC_TREE = generate_flat_topic_tree(get_node_cache(force=force))
     return FLAT_TOPIC_TREE
 
+PATH2NODE_MAP = None
+def get_path2node_map(force=False):
+    global PATH2NODE_MAP
+    if PATH2NODE_MAP is None or force:
+        generate_path_to_node_map(get_node_cache(force=force))
+    return PATH2NODE_MAP
 
 def validate_ancestor_ids(topictree=None):
     """
@@ -105,6 +111,17 @@ def generate_slug_to_video_id_map(node_cache=None):
         slug2id_map[v[0]['slug']] = video_id
 
     return slug2id_map
+
+def generate_path_to_node_map(node_cache=None):
+    """Return map of node paths to their nodes"""
+    
+    node_cache = node_cache or get_node_cache()
+    path2node_map = dict()
+    for kind, nodes in node_cache.items():
+        for node_id, node in nodes.items():
+            assert len(node) == 1, "Making sure Dylan understands node_cache"
+            path2node_map[node[0]["path"]] = node[0] 
+    return path2node_map
 
 
 def generate_flat_topic_tree(node_cache=None):

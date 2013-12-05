@@ -133,47 +133,14 @@ def refresh_topic_cache(handler, force=False):
 
 @backend_cache_page
 def splat_handler(request, splat):
-    slugs = filter(lambda x: x, splat.split("/"))
-    current_node = topicdata.TOPICS
-    seeking = "Topic" # search for topics, until we find videos or exercise
-    for slug in slugs:
-        # towards the end of the url, we switch from seeking a topic node
-        #   to the particular type of node in the tree
-        for kind, kind_slug in topic_tools.kind_slugs.items():
-            if slug == kind_slug.split("/")[0]:
-                seeking = kind
-                break
-
-        # match each step in the topics hierarchy, with the url slug.
-        else:
-            children = [child for child in current_node['children'] if child['kind'] == seeking]
-            if not children:
-                raise Http404
-            match = None
-            prev = None
-            next = None
-            for child in children:
-                if match:
-                    next = child
-                    break
-                if child["slug"] == slug:
-                    match = child
-                else:
-                    prev = child
-            if not match:
-                raise Http404
-            current_node = match
-    if current_node["kind"] == "Topic":
-        return topic_handler(request, cached_nodes={"topic": current_node})
-    elif current_node["kind"] == "Video":
-        return video_handler(request, cached_nodes={"video": current_node, "prev": prev, "next": next})
-    elif current_node["kind"] == "Exercise":
-        cached_nodes = topic_tools.get_related_videos(current_node, limit_to_available=False)
-        cached_nodes["exercise"] = current_node
-        return exercise_handler(request, cached_nodes=cached_nodes)
-    else:
-        raise Http404
-
+    node = topic_tools.get_path2node_map().get(request.path)
+    kind = node["kind"].lower()
+    if kind is "topic":
+        topic_handler(request, node)
+    elif kind is "video":
+        video_handler(request, node)
+    elif kind is "exercise":
+        exercise_handler(request, node)
 
 @backend_cache_page
 @render_to("topic.html")
