@@ -53,10 +53,10 @@ class Command(BaseCommand):
                     Please enter a valid directory." % location)
             # Base path must be valid
             # append trailing slash to parent_path if it's not there
-            parent_path = parent_path if parent_path == "/" else parent_path + "/"
-            if not get_topic_by_path(parent_path):
-                raise CommandError("The base path:'%s' does not exist in topics.json. \
-                    Please enter a valid base path." % parent_path)
+            parent_path = parent_path if parent_path[-1] == "/" else parent_path + "/"
+            # if not get_topic_by_path(parent_path):
+            #     raise CommandError("The base path:'%s' does not exist in topics.json. \
+            #         Please enter a valid base path." % parent_path)
             # File name must be unique
             if os.path.exists(os.path.join(settings.DATA_PATH, file_name)):
                 raise CommandError("The file name '%s' is taken. \
@@ -93,11 +93,11 @@ def add_content(location, parent_path, file_name):
         """Return list of dictionaries of subdirectories and/or files in the location"""
         # Recursively add all subdirectories
         children = []
-
+        import pdb; pdb.set_trace()
         dirpath = location
-        base_name = os.path.basename(location)
+        base_name = os.path.basename(location[:-1])
         topic_slug = slugify(base_name)
-        current_path = os.path.join(parent_path, topic_slug) + "/"
+        current_path = os.path.join(parent_path, topic_slug) 
         node= {
             "kind": "Topic",
             "path": current_path,
@@ -105,7 +105,7 @@ def add_content(location, parent_path, file_name):
             "title": humanize_name(base_name),
             "slug": topic_slug,
             "description": "",
-            "parent_id": os.path.basename(parent_path),
+            "parent_id": os.path.basename(parent_path[:-1]),
             "ancestor_ids": filter(None, parent_path.split("/")),  # TODO(bcipolli) get this from the parent node directly
             "hide": False,
             "children": [construct_node(os.path.join(location, s), current_path) for s in os.listdir(location) if os.path.isdir(os.path.join(location, s))],
@@ -124,7 +124,7 @@ def add_content(location, parent_path, file_name):
                 "youtube_id": file_slug,
                 "id": file_slug,
                 "title": humanize_name(filename),
-                "path": os.path.join(current_path, file_slug) + "/",
+                "path": os.path.join(current_path, file_slug),
                 "ancestor_ids": filter(None, current_path.split("/")),
                 "slug": file_slug,
                 "parent_id": os.path.basename(topic_slug),
@@ -176,21 +176,10 @@ def add_content(location, parent_path, file_name):
 def inject_topic_tree(new_node, parent_path):
     """Insert all local content into topic_tree"""
     # Update portion of topic tree
-    old_node = get_topic_by_path(new_node["path"])
-    if old_node:
-        logging.info("Updating node at path %s" % new_node["path"])
-        old_node.update(new_node)
-    else:
-        logging.info("Inserting node to path %s" % new_node["path"])
-        parent_node = get_topic_by_path(parent_path)
-        parent_node["children"].append(new_node)
-
-    # Write updated topic tree to disk
-    topic_tree = get_topic_tree()
-    topic_file_path = os.path.join(settings.DATA_PATH, topics_file)
-    with open(topic_file_path, 'w') as f:
-        json.dump(topic_tree, f, indent=4)
-    logging.info("Rewrote topic tree: %s" % topic_file_path)
+    parent_node = get_topic_by_path(parent_path)
+    parent_node["children"].append(new_node)
+    rewrite_topic_tree()
+    
 
     # Regenerate node cache
 
@@ -221,7 +210,13 @@ def inject_topic_tree(new_node, parent_path):
 #         for v in videos:
 
     # Finally delete the mapping
-
+def rewrite_topic_tree():
+    """Write topic tree from memory to disk"""
+    topic_tree = get_topic_tree()
+    topic_file_path = os.path.join(settings.DATA_PATH, topics_file)
+    with open(topic_file_path, 'w') as f:
+        json.dump(topic_tree, f, indent=4)
+    logging.info("Rewrote topic tree: %s" % topic_file_path)
 
 def restore():
     os.remove(os.path.join(settings.DATA_PATH, "topics.json"))
