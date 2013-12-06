@@ -18,10 +18,9 @@ from django.utils.translation import ugettext as _
 import settings
 from .models import UpdateProgressLog, VideoFile
 from .views import get_installed_language_packs
-from i18n.models import LanguagePack
 from main import topicdata
 from shared.decorators import require_admin
-from shared.jobs import force_job, job_status
+from shared.jobs import force_job
 from shared.videos import delete_downloaded_files
 from utils.django_utils import call_command_async
 from utils.general import isnumeric, break_into_chunks
@@ -91,6 +90,7 @@ def _process_log_to_dict(process_log):
             "process_percent": process_log.process_percent,
             "stage_name": process_log.stage_name,
             "stage_percent": process_log.stage_percent,
+            "stage_status": process_log.stage_status,
             "cur_stage_num": 1 + int(math.floor(process_log.total_stages * process_log.process_percent)),
             "total_stages": process_log.total_stages,
             "notes": process_log.notes,
@@ -132,18 +132,6 @@ def start_video_download(request):
 
     force_job("videodownload", _("Download Videos"))
     return JsonResponse({})
-
-
-@require_admin
-@api_handle_error_with_json
-def check_video_download(request):
-    youtube_ids = simplejson.loads(request.raw_post_data or "{}").get("youtube_ids", [])
-    percentages = {}
-    percentages["downloading"] = job_status("videodownload")
-    for id in youtube_ids:
-        videofile = get_object_or_None(VideoFile, youtube_id=id) or VideoFile(youtube_id=id)
-        percentages[id] = videofile.percent_complete
-    return JsonResponse(percentages)
 
 
 @require_admin
@@ -193,7 +181,12 @@ def installed_language_packs(request):
     installed = list(get_installed_language_packs())
     is_en_in_language_packs = filter(lambda l: l['code'] == 'en', installed)
     if not is_en_in_language_packs:
-        en = {'name': 'English', 'code': 'en', 'subtitle_count': 0, 'percent_translated': 100}
+        en = {'name': 'English',
+              'code': 'en',
+              'subtitle_count': 0,
+              'percent_translated': 100,  # Our software is written in english
+              'language_pack_version': 0,  # so that it can always be upgraded if there's an en language pack
+        }
         installed.insert(0, en)         # prepend so that it's always at the top of the list of languages
     return JsonResponse(installed)
 
@@ -230,7 +223,7 @@ def annotate_topic_tree(node, level=0, statusdict=None):
                     unstarted = False
                 children.append(child)
         return {
-            "title": node["title"],
+            "title": _(node["title"]),
             "tooltip": re.sub(r'<[^>]*?>', '', node["description"] or ""),
             "isFolder": True,
             "key": node["id"],

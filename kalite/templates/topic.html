@@ -14,11 +14,15 @@
            line-height: 23px;
            margin-left: 10px;
         }
-        .subtitle_indicator {
+        .subtitle-indicator {
             background-color: #aaf;
+            margin: 0px 1px 0px 0px;
+            padding: 2px;
         }
-        .video_indicator {
+        .dubbedvideo-indicator {
             background-color: #faa;
+            margin: 0px 1px 0px 0px;
+            padding: 2px;
         }
     </style>
 {% endblock headcss %}
@@ -82,15 +86,27 @@
             <a href="v/{{ video.slug }}/" class="video-link client-online-only video-{% if not video.available %}un{% endif %}available">
                 {% trans video.title %}
             </a>
-            <a href="v/{{ video.slug }}/" class="video-link not-client-online-only video-{% if not video.urls %}un{% endif %}available">
+            <a href="v/{{ video.slug }}/" class="video-link not-client-online-only video-{% if not video.on_disk %}un{% endif %}available">
                 {% trans video.title %}
             </a>
 
-            {% for lang, urls in video.urls.iteritems %}
-                <span class="video_indicator">{{ lang }}</span>
-                {% if urls.subtitles %}
-                <span class="subtitle_indicator">{{ lang }}</span>
+            {# dubbed videos #}
+            {% for lang, avail in video.availability.iteritems %}
+                {% if avail.on_disk %}
+                <span class="dubbedvideo-indicator">
+                    <a href="v/{{ video.slug }}/?lang={{ lang }}">
+                        {{ lang }}
+                    </a></span>
                 {% endif %}
+            {% endfor %}
+
+            {# subtitles #}{# TODO(bcipolli) don't hard-code to english? #}
+            {% for lang in video.availability.en.subtitles.keys %}
+                <span class="subtitle-indicator">
+                    <a href="v/{{ video.slug }}/?lang={{ lang }}">
+                {{ lang }}
+</a>
+                </span>
             {% endfor %}
         </li>
         {% endfor %}
@@ -105,6 +121,16 @@
         <li>
             <span class="progress-circle" data-exercise-id="{{ exercise.name }}"></span>
             <a class="exercise-link" href="e/{{ exercise.name }}/">{% trans exercise.display_name %}</a>
+
+            {# dubbed videos #}
+            {% for lang in exercise_langs|get_item:exercise.id %}
+                <span class="dubbedvideo-indicator">
+                    <a href="e/{{ exercise.slug }}/?lang={{ lang }}">
+                        {{ lang }}
+                    </a>
+                </span>
+            {% endfor %}
+
         </li>
         {% endfor %}
         <br/>

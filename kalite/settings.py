@@ -136,8 +136,7 @@ STATIC_ROOT    = os.path.realpath(getattr(local_settings, "STATIC_ROOT", PROJECT
 # Other defined paths
 DATA_PATH      = os.path.realpath(getattr(local_settings, "DATA_PATH", PROJECT_PATH + "/static/data/")) + "/"
 LOCAL_CONTENT_DATA_PATH = os.path.realpath(getattr(local_settings, "LOCAL_CONTENT_DATA_PATH", PROJECT_PATH + "../data/local_topics/")) + "/"
-SUBTITLES_DATA_ROOT = os.path.realpath(getattr(local_settings, "SUBTITLES_DATA_ROOT", DATA_PATH + "subtitles/")) + "/"
-LANGUAGE_PACK_ROOT = os.path.realpath(getattr(local_settings, "LANGUAGE_PACK_ROOT", STATIC_ROOT + "language_packs/")) + "/"
+DATA_PATH_SECURE = os.path.realpath(getattr(local_settings, "DATA_PATH", os.path.join(PROJECT_PATH, "..", "data"))) + "/"
 
  # Make this unique, and don't share it with anybody.
 SECRET_KEY     = getattr(local_settings, "SECRET_KEY", "8qq-!fa$92i=s1gjjitd&%s@4%ka9lj+=@n7a&fzjpwu%3kd#u")
@@ -165,11 +164,12 @@ TEMPLATE_LOADERS = (
     "django.template.loaders.app_directories.Loader",
 #     "django.template.loaders.eggs.Loader",
 )
+#    if USE_I18N:
+TEMPLATE_CONTEXT_PROCESSORS += ("i18n.custom_context_processors.languages",)
 
 MIDDLEWARE_CLASSES = getattr(local_settings, 'MIDDLEWARE_CLASSES', tuple())
 MIDDLEWARE_CLASSES = (
     "django.contrib.sessions.middleware.SessionMiddleware",
-    'django.middleware.locale.LocaleMiddleware',
     "django.middleware.common.CommonMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
@@ -199,6 +199,7 @@ INSTALLED_APPS = (
     "kalite",  # contains commands
 ) + INSTALLED_APPS  # append local_settings installed_apps, in case of dependencies
 
+INSTALLED_APPS += ('i18n',)
 
 if DEBUG or CENTRAL_SERVER:
     INSTALLED_APPS += ("django_snippets",)   # used in contact form and (debug) profiling middleware
@@ -213,8 +214,11 @@ if CENTRAL_SERVER:
     CSRF_COOKIE_NAME        = "csrftoken_central"
     LANGUAGE_COOKIE_NAME    = "django_language_central"
     SESSION_COOKIE_NAME     = "sessionid_central"
-    CROWDIN_PROJECT_ID      = getattr(local_settings, "CROWDIN_PROJECT_ID", "ka-lite")
+
+    CROWDIN_PROJECT_ID      = getattr(local_settings, "CROWDIN_PROJECT_ID", None)
     CROWDIN_PROJECT_KEY     = getattr(local_settings, "CROWDIN_PROJECT_KEY", None)
+    AMARA_USERNAME          = getattr(local_settings, "AMARA_USERNAME", None)
+    AMARA_API_KEY           = getattr(local_settings, "AMARA_API_KEY", None)
 
 else:
 
@@ -225,22 +229,25 @@ else:
         "securesync.middleware.FacilityCheck",
         "securesync.middleware.RegisteredCheck",
         "securesync.middleware.DBCheck",
+        "kalite.i18n.middleware.SessionLanguage",
     )
-#    if USE_I18N:
-    TEMPLATE_CONTEXT_PROCESSORS += ("i18n.custom_context_processors.languages",)
-    MIDDLEWARE_CLASSES += ("i18n.middleware.SessionLanguage",)
-    INSTALLED_APPS += ('i18n',)
+
+MIDDLEWARE_CLASSES += (
+    'django.middleware.locale.LocaleMiddleware',
+)
 
 ########################
 # Debugging and testing
 ########################
 
 # Set logging level based on the value of DEBUG (evaluates to 0 if False, 1 if True)
-logging.basicConfig()
+LOGGING_LEVEL = getattr(local_settings, "LOGGING_LEVEL", logging.DEBUG if DEBUG else logging.INFO)
 LOG = getattr(local_settings, "LOG", logging.getLogger("kalite"))
-LOG.setLevel(logging.DEBUG*DEBUG + logging.INFO*(1-DEBUG))
-
 TEMPLATE_DEBUG = getattr(local_settings, "TEMPLATE_DEBUG", DEBUG)
+
+logging.basicConfig()
+LOG.setLevel(LOGGING_LEVEL)
+logging.getLogger("requests").setLevel(logging.WARNING)  # shut up requests!
 
 # Django debug_toolbar config
 if getattr(local_settings, "USE_DEBUG_TOOLBAR", False):
@@ -330,7 +337,7 @@ assert PASSWORD_ITERATIONS_STUDENT is None or PASSWORD_ITERATIONS_STUDENT >= 1, 
 PASSWORD_ITERATIONS_TEACHER_SYNCED = getattr(local_settings, "PASSWORD_ITERATIONS_TEACHER_SYNCED", 5000)
 PASSWORD_ITERATIONS_STUDENT_SYNCED = getattr(local_settings, "PASSWORD_ITERATIONS_STUDENT_SYNCED", 2500)
 assert PASSWORD_ITERATIONS_TEACHER_SYNCED >= 5000, "PASSWORD_ITERATIONS_TEACHER_SYNCED must be >= 5000"
-assert PASSWORD_ITERATIONS_STUDENT_SYNCED >= 2500, "PASSWORD_ITERATIONS_STUDENT_SYNCED must be >= 5000"
+assert PASSWORD_ITERATIONS_STUDENT_SYNCED >= 2500, "PASSWORD_ITERATIONS_STUDENT_SYNCED must be >= 2500"
 
 
 ########################
@@ -410,7 +417,7 @@ if CENTRAL_SERVER:
     #   We do this so that we have control over our own key/secret (secretly, of course!)
     KHAN_API_CONSUMER_KEY = getattr(local_settings, "KHAN_API_CONSUMER_KEY", "")
     KHAN_API_CONSUMER_SECRET = getattr(local_settings, "KHAN_API_CONSUMER_SECRET", "")
-    
+
     # Postmark settings, to enable sending registration/invitation emails
     POSTMARK_API_KEY = getattr(local_settings, "POSTMARK_API_KEY", "")
     POSTMARK_SENDER = getattr(local_settings, "POSTMARK_SENDER", CENTRAL_FROM_EMAIL)
@@ -496,7 +503,7 @@ assert not AUTO_LOAD_TEST or not CENTRAL_SERVER, "AUTO_LOAD_TEST only on local s
 CONFIG_PACKAGE = getattr(local_settings, "CONFIG_PACKAGE",
                    ("RPi" if platform.uname()[0] == "Linux" and platform.uname()[4] == "armv6l" and not CENTRAL_SERVER
                    else []))
-                        
+
 if isinstance(CONFIG_PACKAGE, basestring):
     CONFIG_PACKAGE = [CONFIG_PACKAGE]
 CONFIG_PACKAGE = [cp.lower() for cp in CONFIG_PACKAGE]
@@ -514,9 +521,8 @@ if package_selected("RPi"):
     #SYNCING_THROTTLE_WAIT_TIME = getattr(local_settings, "SYNCING_THROTTLE_WAIT_TIME", 1.0)
     #SYNCING_MAX_RECORDS_PER_REQUEST = getattr(local_settings, "SYNCING_MAX_RECORDS_PER_REQUEST", 10)
 
-
     PASSWORD_ITERATIONS_TEACHER = getattr(local_settings, "PASSWORD_ITERATIONS_TEACHER", 2000)
-    PASSWORD_ITERATIONS_STUDENT = getattr(local_settings, "PASSWORD_ITERATIONS_STUDENT", 1000)
+    PASSWORD_ITERATIONS_STUDENT = getattr(local_settings, "PASSWORD_ITERATIONS_STUDENT", 500)
 
     ENABLE_CLOCK_SET = getattr(local_settings, "ENABLE_CLOCK_SET", True)
 
