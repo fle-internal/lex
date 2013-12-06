@@ -127,7 +127,6 @@ def generate_path_to_node_map(node_cache=None):
             path2node_map[node[0]["path"]] = node[0]
     return path2node_map
 
-
 def generate_flat_topic_tree(node_cache=None, lang_code=settings.LANGUAGE_CODE):
     categories = node_cache or get_node_cache()
     result = dict()

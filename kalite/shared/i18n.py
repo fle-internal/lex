@@ -298,7 +298,6 @@ def update_jsi18n_file(code="en"):
     with open(output_file, "w") as fp:
         fp.write(response.content)
 
-
 def select_best_available_language(available_codes, target_code=settings.LANGUAGE_CODE):
     if not available_codes:
         return None
