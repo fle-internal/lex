@@ -110,7 +110,7 @@ def generate_slug_to_video_id_map(node_cache=None):
     slug2id_map = dict()
 
     # Make a map from youtube ID to video slug
-    for video_id, v in node_cache['Video'].iteritems():
+    for video_id, v in node_cache.get('Video', {}).iteritems():
         assert v[0]["slug"] not in slug2id_map, "Make sure there's a 1-to-1 mapping between slug and video_id"
         slug2id_map[v[0]['slug']] = video_id
 
@@ -118,13 +118,13 @@ def generate_slug_to_video_id_map(node_cache=None):
 
 def generate_path_to_node_map(node_cache=None):
     """Return map of node paths to their nodes"""
-    
+
     node_cache = node_cache or get_node_cache()
     path2node_map = dict()
     for kind, nodes in node_cache.items():
         for node_id, node in nodes.items():
             assert len(node) == 1, "Making sure Dylan understands node_cache"
-            path2node_map[node[0]["path"]] = node[0] 
+            path2node_map[node[0]["path"]] = node[0]
     return path2node_map
 
 
@@ -201,7 +201,7 @@ def get_exercises(topic):
 
 def get_live_topics(topic):
     """Given a topic node, returns all children that are not hidden and contain at least one video (non-recursively)"""
-    return filter(lambda node: node["kind"] == "Topic" and not node["hide"] and "Video" in node["contains"], topic["children"])
+    return filter(lambda node: node["kind"] == "Topic" and not node["hide"] and (set(node["contains"]) - set(["Topic"])), topic["children"])
 
 
 def get_downloaded_youtube_ids(videos_path=settings.CONTENT_ROOT, format="mp4"):
@@ -228,7 +228,7 @@ def get_topic_by_path(path, root_node=None):
         else:
             break
 
-    assert not cur_node or cur_node["path"] == path, "Either didn't find it, or found the right thing."
+    #assert not cur_node or cur_node["path"] == path, "Either didn't find it, or found the right thing."
 
     return cur_node or {}
 
@@ -361,3 +361,22 @@ def is_sibling(node1, node2):
     parent_path2 = parse_path(node2)
 
     return parent_path1 == parent_path2
+
+
+def get_neighbor_nodes(node, neighbor_kind=None):
+
+    parent = get_parent(node)
+    prev = next = None
+    filtered_children = [ch for ch in parent["children"] if not neighbor_kind or ch["kind"] == neighbor_kind]
+
+    for idx, child in enumerate(filtered_children):
+        if child["path"] != node["path"]:
+            continue
+
+        if idx < (len(filtered_children) - 1):
+            next = filtered_children[idx + 1]
+        if idx > 0:
+            prev = filtered_children[idx - 1]
+        break
+
+    return prev, next

@@ -33,7 +33,7 @@ from shared.caching import backend_cache_page
 from shared.decorators import require_admin
 from shared.i18n import select_best_available_language
 from shared.jobs import force_job
-from shared.topic_tools import get_ancestor, get_parent
+from shared.topic_tools import get_ancestor, get_parent, get_neighbor_nodes
 from shared.videos import stamp_availability_on_topic, stamp_availability_on_video, video_counts_need_update
 from utils.internet import is_loopback_connection, JsonResponse, get_ip_addresses
 
@@ -145,14 +145,27 @@ def refresh_topic_cache(handler, force=False):
 
 @backend_cache_page
 def splat_handler(request, splat):
-    node = topic_tools.get_path2node_map().get(request.path)
-    kind = node["kind"].lower()
-    if kind is "topic":
-        topic_handler(request, node)
-    elif kind is "video":
-        video_handler(request, node)
-    elif kind is "exercise":
-        exercise_handler(request, node)
+    current_node = topicdata.TOPICS
+    while current_node:
+        match = [ch for ch in (current_node['children'] or []) if request.path.startswith(ch["path"])]
+        if not match:
+            raise Http404
+        current_node = match[0]
+        if request.path == current_node["path"]:
+            break
+
+    if current_node["kind"] == "Topic":
+        return topic_handler(request, cached_nodes={"topic": current_node})
+    elif current_node["kind"] == "Video":
+        prev, next = get_neighbor_nodes(current_node, neighbor_kind="Video")
+        return video_handler(request, cached_nodes={"video": current_node, "prev": prev, "next": next})
+    elif current_node["kind"] == "Exercise":
+        cached_nodes = topic_tools.get_related_videos(current_node, limit_to_available=False)
+        cached_nodes["exercise"] = current_node
+        return exercise_handler(request, cached_nodes=cached_nodes)
+    else:
+        raise Http404
+
 
 @backend_cache_page
 @render_to("topic.html")
