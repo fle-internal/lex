@@ -170,15 +170,22 @@ def add_content(location, base_path, file_name):
 
 def inject_topic_tree(local_content, base_path):
     """Insert all local content into topic_tree"""
-    topic_file_path = os.path.join(settings.DATA_PATH, topics_file)
+    # Update portion of topic tree
+    old_node = get_topic_by_path(local_content[0]["path"])
+    if old_node:
+        old_node.update(local_content)
+    else:
+        parent_node = get_topic_by_path(base_path)
+        parent_node["children"] += local_content
+
+    # Write updated topic tree to disk
     topic_tree = get_topic_tree()
-
-    get_path2node_map()
-
+    topic_file_path = os.path.join(settings.DATA_PATH, topics_file)
     with open(topic_file_path, 'w') as f:
-        json.dump(topic_tree, f)
+        json.dump(topic_tree, f, indent=4)
     logging.info("Rewrote topic tree: %s" % topic_file_path)
 
+    # Regenerate node cache
 
 # def remove_content(file_name):
 #     """
