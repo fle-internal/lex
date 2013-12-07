@@ -25,7 +25,7 @@ class Command(BaseCommand):
 
     option_list = BaseCommand.option_list + (
         make_option('-l', '--directory-location', action='store', dest='location', default=None,
-                    help='The full path of the base directory that contains the 3rd party content.'),
+                    help='The full path of the base directory that contains the 3rd party content.'),   
         make_option('-p', '--parent-path', action='store', dest='parent_path', default=None,
                     help='Parent node under which the given directory (topic) should be inserted under'),
         make_option('-c', '--copy', action='store_true', dest='copy', default=None,
@@ -58,6 +58,8 @@ class Command(BaseCommand):
         if location:
             if not os.path.exists(location):
                 raise CommandError("The location given:'%s' does not exist on your computer.  Please enter a valid directory." % location)
+            elif os.path.exists(os.path.join(settings.LOCAL_CONTENT_DATA_PATH, file_name)):
+                raise CommandError("The file name '%s' is already in use for other local_content. Please specify a unique file name." % file_name)
             elif not parent_path:
                 raise CommandError("You must specify a parent URL to insert/update the new node in the topic tree.")
             elif not get_topic_by_path(parent_path):
@@ -116,6 +118,7 @@ def add_content(location, parent_path, copy_files=True, file_name=None):
             filename = os.path.splitext(full_filename)[0]
             extension = os.path.splitext(full_filename)[1].lower()
             file_slug = slugify(filename)
+            normalized_filename = "%s%s" % (ensure_unique_lc_filename(file_slug), extension)
             node["children"].append({
                 "youtube_id": file_slug,
                 "id": file_slug,
@@ -126,10 +129,10 @@ def add_content(location, parent_path, copy_files=True, file_name=None):
                 "slug": file_slug,
                 "parent_id": os.path.basename(topic_slug),
                 "kind": kind,
+                "unique_filename": normalized_filename,
             })
 
             # Copy over content
-            normalized_filename = "%s%s" % (file_slug, extension)
             file_fn = shutil.copy if copy_files else shutil.move
             file_fn(os.path.join(location, full_filename), os.path.join(LOCAL_CONTENT_ROOT, normalized_filename))
             logging.debug("%s file %s to local content directory." % ("Copied" if copy_files else "Moved", normalized_filename))
@@ -192,7 +195,7 @@ def remove_content(file_name, data_path=settings.DATA_PATH):
             else:
                 parent["children"][:] = [child for child in parent["children"] if child.get('id') != local_content["id"]]
         except:
-            raise CommandError("Failed to delete %s from topic tree" % local_content["path"])
+            logging.error("Failed to delete %s from topic tree" % local_content["path"])
         else:
             rewrite_topic_tree()
             logging.info("Successfully removed %s from topic tree" % local_content["path"])
@@ -200,14 +203,9 @@ def remove_content(file_name, data_path=settings.DATA_PATH):
     def delete_content_files(local_content):
         """Remove local content videos from content directory"""
         videos = get_all_leaves(local_content, "Video")
-        videos_deleted = 0 
         for v in videos:
-            # TODO (we should ensure that we are storing unique filenames, and we should store that in the local content)
-            possible_videos = glob.glob(os.path.join(settings.LOCAL_CONTENT_ROOT, "%s.*" % v["slug"]))
-            assert len(possible_videos) == 1, "Crap, we have a duplicate filename. Too late now!"
-            os.remove(os.path.join(settings.LOCAL_CONTENT_ROOT, possible_videos[0]))
-            videos_deleted += 1
-        logging.info("Deleted %d videos from the local content directory" % videos_deleted)
+            os.remove(os.path.join(settings.LOCAL_CONTENT_ROOT, v["unique_filename"]))
+            logging.debug("Deleted video %s" % v["unique_filename"])
 
     with open(os.path.join(settings.LOCAL_CONTENT_DATA_PATH, file_name)) as f:
         local_content = json.load(f)
@@ -234,3 +232,23 @@ def rewrite_topic_tree():
     with open(topic_file_path, 'w') as f:
         json.dump(topic_tree, f, indent=4)
     logging.info("Rewrote topic tree: %s" % topic_file_path)
+
+def ensure_unique_lc_filename(file_name):
+    """Ensure filename is unique within the context of the local content directory"""
+    def is_unique(test_name):
+        if len(glob.glob(os.path.join(settings.LOCAL_CONTENT_ROOT, "%s.*" % test_name))) > 0:
+            return False
+        else:
+            return True
+
+    if not is_unique(file_name):
+        iterator = 1
+        while not is_unique(file_name + str(iterator)):
+            iterator += 1
+        file_name = file_name + str(iterator)
+    
+    return file_name
+
+
+
+    
