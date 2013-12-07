@@ -15,7 +15,7 @@ from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
 import settings
-from settings import LOG as logging, LOCAL_CONTENT_ROOT, LOCAL_CONTENT_DATA_PATH
+from settings import LOG as logging, CONTENT_ROOT, LOCAL_CONTENT_DATA_PATH
 from shared.topic_tools import get_topic_by_path, topics_file, get_topic_tree, get_all_leaves, get_path2node_map, get_parent
 from utils.general import ensure_dir, get_kind_by_extension, humanize_name
 
@@ -88,7 +88,7 @@ def add_content(location, parent_path, copy_files=True, file_name=None):
     hierarchy to JSON, copying content into the local_content directory,
     and updating the topic tree with the mapping inserted.
     """
-    ensure_dir(LOCAL_CONTENT_ROOT)
+    ensure_dir(CONTENT_ROOT)
 
     def construct_node(location, parent_path):
         """Return list of dictionaries of subdirectories and/or files in the location"""
@@ -134,7 +134,7 @@ def add_content(location, parent_path, copy_files=True, file_name=None):
 
             # Copy over content
             file_fn = shutil.copy if copy_files else shutil.move
-            file_fn(os.path.join(location, full_filename), os.path.join(LOCAL_CONTENT_ROOT, normalized_filename))
+            file_fn(os.path.join(location, full_filename), os.path.join(CONTENT_ROOT, normalized_filename))
             logging.debug("%s file %s to local content directory." % ("Copied" if copy_files else "Moved", normalized_filename))
 
         # Finally, can add contains
@@ -204,7 +204,7 @@ def remove_content(file_name, data_path=settings.DATA_PATH):
         """Remove local content videos from content directory"""
         videos = get_all_leaves(local_content, "Video")
         for v in videos:
-            os.remove(os.path.join(settings.LOCAL_CONTENT_ROOT, v["unique_filename"]))
+            os.remove(os.path.join(settings.CONTENT_ROOT, v["unique_filename"]))
             logging.debug("Deleted video %s" % v["unique_filename"])
 
     with open(os.path.join(settings.LOCAL_CONTENT_DATA_PATH, file_name)) as f:
@@ -236,7 +236,7 @@ def rewrite_topic_tree():
 def ensure_unique_lc_filename(file_name):
     """Ensure filename is unique within the context of the local content directory"""
     def is_unique(test_name):
-        if len(glob.glob(os.path.join(settings.LOCAL_CONTENT_ROOT, "%s.*" % test_name))) > 0:
+        if len(glob.glob(os.path.join(settings.CONTENT_ROOT, "%s.*" % test_name))) > 0:
             return False
         else:
             return True
