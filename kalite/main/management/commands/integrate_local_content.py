@@ -25,7 +25,7 @@ class Command(BaseCommand):
 
     option_list = BaseCommand.option_list + (
         make_option('-l', '--directory-location', action='store', dest='location', default=None,
-                    help='The full path of the base directory that contains the 3rd party content.'),   
+                    help='The full path of the base directory that contains the 3rd party content.'),
         make_option('-p', '--parent-path', action='store', dest='parent_path', default=None,
                     help='Parent node under which the given directory (topic) should be inserted under'),
         make_option('-c', '--copy', action='store_true', dest='copy', default=None,
@@ -58,8 +58,6 @@ class Command(BaseCommand):
         if location:
             if not os.path.exists(location):
                 raise CommandError("The location given:'%s' does not exist on your computer.  Please enter a valid directory." % location)
-            elif os.path.exists(os.path.join(settings.LOCAL_CONTENT_DATA_PATH, file_name)):
-                raise CommandError("The file name '%s' is already in use for other local_content. Please specify a unique file name." % file_name)
             elif not parent_path:
                 raise CommandError("You must specify a parent URL to insert/update the new node in the topic tree.")
             elif not get_topic_by_path(parent_path):
@@ -67,6 +65,8 @@ class Command(BaseCommand):
             elif int(bool(options["move"])) + int(bool(options["copy"])) != 1:
                 raise CommandError("You must specify one flag to copy content (--copy) or move content (--move)")
             else:
+                if os.path.exists(os.path.join(settings.LOCAL_CONTENT_DATA_PATH, file_name)):
+                    logging.info("Overwriting...")#raise CommandError("The file name '%s' is already in use for other local_content. Please specify a unique file name." % file_name)
                 logging.info("Compiling data from %s for insertion to %s ..." % (location, parent_path))
                 add_content(location, parent_path, copy_files=options["copy"], file_name=file_name)
                 logging.info("Successfully added content bundle %s" % location)
@@ -76,7 +76,7 @@ class Command(BaseCommand):
                 raise CommandError("You cannot delete the topic tree wildman. Watch your typing fingers.")
             elif not os.path.exists(os.path.join(settings.LOCAL_CONTENT_DATA_PATH, file_name)):
                 raise CommandError("The file name '%s' does not exist. Please specify a valid file name." % file_name)
-            else: 
+            else:
                 logging.info("Deleting content mapped in '%s'" % file_name)
                 remove_content(file_name)
                 logging.info("Successfully removed content bundle %s" % file_name)
@@ -123,8 +123,8 @@ def add_content(location, parent_path, copy_files=True, file_name=None):
                 "youtube_id": file_slug,
                 "id": file_slug,
                 "title": humanize_name(filename),
-                "path": os.path.join(current_path, file_slug),
                 "path": add_slash(os.path.join(current_path, file_slug)),
+                "content_type": extension,  # need this for later
                 "ancestor_ids": filter(None, current_path.split("/")),
                 "slug": file_slug,
                 "parent_id": os.path.basename(topic_slug),
@@ -246,9 +246,9 @@ def ensure_unique_lc_filename(file_name):
         while not is_unique(file_name + str(iterator)):
             iterator += 1
         file_name = file_name + str(iterator)
-    
+
     return file_name
 
 
 
-    
+
