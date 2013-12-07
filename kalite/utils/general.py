@@ -239,10 +239,9 @@ def get_kind_by_extension(filename):
         "Audio": ["mp3", "wma", "wav", "mid", "ogg"],
         "Document": ["pdf", "txt", "rtf", "html", "xml"],
     }
-
     extension = os.path.splitext(filename)[1]
     if extension:
-        extension = extension[1:]
+        extension = extension[1:].lower()
     if extension in file_kind_dictionary["Video"]:
         return "Video"
     elif extension in file_kind_dictionary["Audio"]:
@@ -250,8 +249,7 @@ def get_kind_by_extension(filename):
     elif extension in file_kind_dictionary["Document"]:
         return "Document"
     else:
-        return "Document"
-        #raise Exception("Can't tell what type of file '%s' is by the extension '%s'. Please add to lookup dictionary and re-run command." % (filename, extension))
+        raise Exception("Can't tell what type of file '%s' is by the extension '%s'. Please add to lookup dictionary and re-run command." % (filename, extension))
 
 
 def slugify_path(path):
