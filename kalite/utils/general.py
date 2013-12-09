@@ -236,18 +236,36 @@ def get_kind_by_extension(filename):
     # Hardcoded file types
     file_kind_dictionary = {
         "Video": ["mp4", "mov", "3gp", "amv", "asf", "asx", "avi", "mpg", "swf", "wmv"],
+        "Image": ["tif", "bmp", "png", "jpg", "jpeg"],
+        "Presentation": ["ppt", "pptx"],
+        "Spreadsheet": ["xls", "xlsx"],
+        "Code": ["html", "js", "css", "py", "pyc"],
         "Audio": ["mp3", "wma", "wav", "mid", "ogg"],
-        "Document": ["pdf", "txt", "rtf", "html", "xml"],
+        "Document": ["pdf", "txt", "rtf", "html", "xml", "doc", "qxd", "docx"],
+        "Zip": ["zip"],
+        "No Extension": [""],
     }
     extension = os.path.splitext(filename)[1]
     if extension:
         extension = extension[1:].lower()
     if extension in file_kind_dictionary["Video"]:
         return "Video"
+    elif extension in file_kind_dictionary["Image"]:
+        return "Image"
+    elif extension in file_kind_dictionary["Presentation"]:
+        return "Presentation"
+    elif extension in file_kind_dictionary["Spreadsheet"]:
+        return "Spreadsheet"
     elif extension in file_kind_dictionary["Audio"]:
         return "Audio"
     elif extension in file_kind_dictionary["Document"]:
         return "Document"
+    elif extension in file_kind_dictionary["Code"]:
+        return "Code"
+    elif extension in file_kind_dictionary["Zip"]:
+        return "Zip"
+    elif extension in file_kind_dictionary["No Extension"]:
+        return "No Extension"
     else:
         raise Exception("Can't tell what type of file '%s' is by the extension '%s'. Please add to lookup dictionary and re-run command." % (filename, extension))
 
