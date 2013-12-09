@@ -271,12 +271,11 @@ def get_subtitles_on_disk(youtube_id):
         return installed_subtitles
 
     def on_disk_distributed(youtube_id):
-        subtitles_path = os.path.join(settings.STATIC_ROOT, "subtitles")
-        if os.path.exists(subtitles_path):
-            installed_subtitles = [lang for lang in os.listdir(subtitles_path) if os.path.exists(get_srt_path_on_disk(youtube_id, lang))]
+        subtitles_root = os.path.join(settings.STATIC_ROOT, "subtitles")
+        if not os.path.exists(subtitles_root):
+            return []
         else:
-            installed_subtitles = []
-        return installed_subtitles
+            return [lang for lang in os.listdir(subtitles_root) if os.path.exists(get_srt_path_on_disk(youtube_id, lang))]
 
     return sorted(on_disk_central(youtube_id) if settings.CENTRAL_SERVER else on_disk_distributed(youtube_id))
 
@@ -298,7 +297,6 @@ def update_jsi18n_file(code="en"):
     response = javascript_catalog(request, packages=('ka-lite.locale',))
     with open(output_file, "w") as fp:
         fp.write(response.content)
-
 
 def select_best_available_language(available_codes, target_code=settings.LANGUAGE_CODE):
     if not available_codes:
