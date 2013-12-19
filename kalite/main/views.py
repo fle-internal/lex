@@ -34,6 +34,7 @@ from shared.decorators import require_admin
 from shared.i18n import select_best_available_language
 from shared.jobs import force_job
 from shared.topic_tools import get_ancestor, get_parent, get_neighbor_nodes
+from shared.topic_tools import get_topic_tree
 from shared.videos import stamp_availability_on_topic, stamp_availability_on_video, video_counts_need_update
 from utils.internet import is_loopback_connection, JsonResponse, get_ip_addresses
 
@@ -209,6 +210,7 @@ def topic_context(topic):
         "topics": my_topics,
         "backup_vids_available": bool(settings.BACKUP_VIDEO_SOURCE),
     }
+    context.update(license_context(topic))
     return context
 
 
@@ -244,6 +246,7 @@ def video_handler(request, video, format="mp4", prev=None, next=None):
         "backup_vids_available": bool(settings.BACKUP_VIDEO_SOURCE),
         "use_mplayer": settings.USE_MPLAYER and is_loopback_connection(request),
     }
+    context.update(license_context(video))
     return context
 
 
@@ -279,6 +282,7 @@ def exercise_handler(request, exercise, **related_videos):
         "exercise_lang": exercise_lang,
         "related_videos": [v for v in related_videos.values() if v["available"]],
     }
+    context.update(license_context(exercise))
     return context
 
 
@@ -304,6 +308,7 @@ def homepage(request, topics):
     Homepage.
     """
     context = topic_context(topics)
+    context.update(license_context(topics))
     context.update({
         "title": "Home",
         "backup_vids_available": bool(settings.BACKUP_VIDEO_SOURCE),
@@ -428,6 +433,14 @@ def search(request, topics):  # we don't use the topics variable, but this setup
         'query': query,
         'max_results': max_results_per_category,
         'category': category,
+    }
+
+def license_context(node, topic_tree=None):
+    topic_tree = topic_tree or get_topic_tree()
+    attributions = set(node.get("attributions", [])).union(set([node["attribution"]]))
+
+    return {
+        "licenses": [lic for key, lic in topic_tree["licenses"].iteritems() if key in attributions],
     }
 
 def handler_403(request, *args, **kwargs):

@@ -16,7 +16,7 @@ from django.core.management.base import BaseCommand, CommandError
 
 import settings
 from settings import LOG as logging, CONTENT_ROOT, LOCAL_CONTENT_DATA_PATH
-from shared.topic_tools import get_topic_by_path, topics_file, get_topic_tree, get_all_leaves, get_path2node_map, get_parent
+from shared.topic_tools import get_topic_by_path, topics_file, get_topic_tree, get_all_leaves, get_path2node_map, get_parent, get_node_cache
 from utils.general import ensure_dir, get_kind_by_extension, humanize_name
 
 
@@ -24,7 +24,7 @@ class Command(BaseCommand):
     help = "Inegrate 3rd party content into KA Lite.\nUSAGE:\n  combine -l, -f to map and copy content into the system.\n use -d and -f to remove local content"
 
     option_list = BaseCommand.option_list + (
-        make_option('-l', '--directory-location', action='store', dest='location', default=None,
+        make_option('-d', '--directory-location', action='store', dest='location', default=None,
                     help='The full path of the base directory that contains the 3rd party content.'),
         make_option('-p', '--parent-path', action='store', dest='parent_path', default=None,
                     help='Parent node under which the given directory (topic) should be inserted under'),
@@ -33,8 +33,14 @@ class Command(BaseCommand):
         make_option('-m', '--move', action='store_true', dest='move', default=None,
                     help='Move resource files to the content directory'),
 
-        make_option('-d', '--delete-content', action='store_true', dest='delete_content', default=None,
-                    help='Remove content from topic tree based on store local content file map'),
+        # License attributions
+        make_option('-l', '--license', action='store', dest='license', default=None,
+                    help='License information'),
+        make_option('-e', '--entity', action='store', dest='entity', default=None,
+                    help='Entity for license'),
+
+#        make_option('-d', '--delete-content', action='store_true', dest='delete_content', default=None,
+#                    help='Remove content from topic tree based on store local content file map'),
         make_option('-f', '--file-name', action='store', dest='file_name', default=None,
                     help='For testing, the name of the file to write as a sibling to topics.json'),
     )
@@ -66,9 +72,10 @@ class Command(BaseCommand):
                 raise CommandError("You must specify one flag to copy content (--copy) or move content (--move)")
             else:
                 if os.path.exists(os.path.join(settings.LOCAL_CONTENT_DATA_PATH, file_name)):
-                    logging.info("Overwriting...")#raise CommandError("The file name '%s' is already in use for other local_content. Please specify a unique file name." % file_name)
+                    logging.info("Overwriting...")
                 logging.info("Compiling data from %s for insertion to %s ..." % (location, parent_path))
-                add_content(location, parent_path, copy_files=options["copy"], file_name=file_name)
+                license = {os.path.basename(location[:-1]): {"entity": options["entity"], "license": options["license"]}}
+                add_content(location, parent_path, copy_files=options["copy"], file_name=file_name, license=license)
                 logging.info("Successfully added content bundle %s" % location)
 
         elif delete:
@@ -82,7 +89,7 @@ class Command(BaseCommand):
                 logging.info("Successfully removed content bundle %s" % file_name)
 
 
-def add_content(location, parent_path, copy_files=True, file_name=None):
+def add_content(location, parent_path, copy_files=True, file_name=None, license=license):
     """
     Take a "root" location and add content to system by mapping file
     hierarchy to JSON, copying content into the local_content directory,
@@ -90,7 +97,7 @@ def add_content(location, parent_path, copy_files=True, file_name=None):
     """
     ensure_dir(CONTENT_ROOT)
 
-    def construct_node(location, parent_path):
+    def construct_node(location, parent_path, attribution):
         """Return list of dictionaries of subdirectories and/or files in the location"""
         # Recursively add all subdirectories
         children = []
@@ -99,6 +106,7 @@ def add_content(location, parent_path, copy_files=True, file_name=None):
         current_path = add_slash(os.path.join(parent_path, topic_slug))
         node= {
             "kind": "Topic",
+            "attribution": attribution,
             "path": current_path,
             "id": topic_slug,
             "title": humanize_name(base_name),
@@ -107,7 +115,7 @@ def add_content(location, parent_path, copy_files=True, file_name=None):
             "parent_id": os.path.basename(parent_path[:-1]),
             "ancestor_ids": filter(None, parent_path.split("/")),  # TODO(bcipolli) get this from the parent node directly
             "hide": False,
-            "children": [construct_node(os.path.join(location, s), current_path) for s in os.listdir(location) if os.path.isdir(os.path.join(location, s))],
+            "children": [construct_node(os.path.join(location, s), current_path, attribution) for s in os.listdir(location) if os.path.isdir(os.path.join(location, s))],
         }
 
         # Add all files
@@ -130,39 +138,56 @@ def add_content(location, parent_path, copy_files=True, file_name=None):
                 "parent_id": os.path.basename(topic_slug),
                 "kind": kind,
                 "unique_filename": normalized_filename,
+                "attribution": attribution,
             })
 
             # Copy over content
             file_fn = shutil.copy if copy_files else shutil.move
-            file_fn(os.path.join(location, full_filename), os.path.join(CONTENT_ROOT, normalized_filename))
+            #file_fn(os.path.join(location, full_filename), os.path.join(CONTENT_ROOT, normalized_filename))
             logging.debug("%s file %s to local content directory." % ("Copied" if copy_files else "Moved", normalized_filename))
 
-        # Finally, can add contains
+        # Finally, can add contains and attributions
         contains = set([])
+        attributions = set([])
         for ch in node["children"]:
             contains = contains.union(ch.get("contains", set([])))
             contains = contains.union(set([ch["kind"]]))
+
+            if "attribution" in ch:
+                attributions = attributions.union(set([ch["attribution"]]))
+            elif "attributions" in ch:
+                attributions = attributions.union(set(ch["attributions"]))
         node["contains"] = list(contains)
+        node["attributions"] = list(attributions)
 
         return node
 
-    def inject_topic_tree(new_node, parent_path, data_path=settings.DATA_PATH):
+    def inject_topic_tree(new_node, parent_path, data_path=settings.DATA_PATH, license=license):
         """Insert all local content into topic_tree"""
         # Update portion of topic tree
         old_node = get_topic_by_path(new_node["path"])
+        parent_node = get_topic_by_path(parent_path)
         if old_node:
             logging.info("Updating node at path %s" % new_node["path"])
             old_node.update(new_node)
         else:
             logging.info("Inserting path %s as child of path %s" % (new_node["path"], parent_path))
-            parent_node = get_topic_by_path(parent_path)
             parent_node["children"].append(new_node)
+
+        # Add to licenses
+        get_topic_tree()["licenses"].update(license)
+
+        # Mark all ancestors with this attribution
+        ancestor_node = parent_node
+        while (ancestor_node):
+            ancestor_node["attributions"] = list(set(ancestor_node["attributions"]).union(set(license.keys())))
+            ancestor_node = get_node_cache("Topic").get(ancestor_node["parent_id"])
 
         # Write updated topic tree to disk
         rewrite_topic_tree()
 
     # First, generate new topic_tree from file hierarchy
-    nodes = construct_node(location, parent_path)
+    nodes = construct_node(location, parent_path, attribution=license.keys()[0])
 
     # Next, write it to disk for future reference
     if file_name:
@@ -173,7 +198,7 @@ def add_content(location, parent_path, copy_files=True, file_name=None):
         logging.info("Wrote output to %s" % write_location)
 
     # Finally, update master topic tree with desired mapping
-    inject_topic_tree(nodes, parent_path)
+    inject_topic_tree(nodes, parent_path, license=license)
 
 
 def remove_content(file_name, data_path=settings.DATA_PATH):

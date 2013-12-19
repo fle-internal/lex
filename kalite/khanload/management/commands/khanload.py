@@ -76,7 +76,7 @@ def download_khan_data(url, debug_cache_file=None, debug_cache_dir=settings.PROJ
     # a) We're in DEBUG mode
     # b) The debug cache file exists
     # c) It's less than 7 days old.
-    if settings.DEBUG and os.path.exists(debug_cache_file) and datediff(datetime.datetime.now(), datetime.datetime.fromtimestamp(os.path.getctime(debug_cache_file)), units="days") <= 14.0:
+    if settings.DEBUG and os.path.exists(debug_cache_file) and datediff(datetime.datetime.now(), datetime.datetime.fromtimestamp(os.path.getctime(debug_cache_file)), units="days") <= 1114.0:
         # Slow to debug, so keep a local cache in the debug case only.
         #sys.stdout.write("Using cached file: %s\n" % debug_cache_file)
         with open(debug_cache_file, "r") as fp:
@@ -129,6 +129,7 @@ def rebuild_topictree(data_path=settings.PROJECT_PATH + "/static/data/", remove_
         # Add some attribute that should have been on there to start with.
         node["parent_id"] = ancestor_ids[-1] if ancestor_ids else None
         node["ancestor_ids"] = ancestor_ids
+        node["attribution"] = "ka"
 
         if kind == "Exercise":
             # For each exercise, need to set the exercise_id
@@ -187,6 +188,7 @@ def rebuild_topictree(data_path=settings.PROJECT_PATH + "/static/data/", remove_
         # Mark on topics whether they contain Videos, Exercises, or both
         if kind == "Topic":
             node["contains"] = list(child_kinds)
+            node["attributions"] = ["ka"]
 
         return child_kinds
     recurse_nodes(topictree)
@@ -301,8 +303,12 @@ def rebuild_topictree(data_path=settings.PROJECT_PATH + "/static/data/", remove_
             del node["children"][ci]
     recurse_nodes_to_remove_childless_nodes(topictree)
 
+    # Add the license info
+    topictree["licenses"] =  {
+        "ka": {"entity": "Khan Academy", "license": "cc-by-nc-sa", "version": "3"},
+    }
 
-        # Do the actual deletion
+    # Do the actual deletion
     with open(os.path.join(data_path, topic_tools.topics_file), "w") as fp:
         fp.write(json.dumps(topictree, indent=2))
 
