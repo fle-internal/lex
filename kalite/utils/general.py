@@ -267,7 +267,7 @@ def get_kind_by_extension(filename):
     elif extension in file_kind_dictionary["No Extension"]:
         return "No Extension"
     else:
-        raise Exception("Can't tell what type of file '%s' is by the extension '%s'. Please add to lookup dictionary and re-run command." % (filename, extension))
+        return "Document" #raise Exception("Can't tell what type of file '%s' is by the extension '%s'. Please add to lookup dictionary and re-run command." % (filename, extension))
 
 
 def slugify_path(path):
