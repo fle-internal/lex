@@ -15,6 +15,7 @@ node_modules/
 tmp/
 virtualenv/
 writeup/
+/_crowdin_cache
 /_khanload_cache
 /mergetomaster.sh
 /run_command.*
@@ -40,3 +41,4 @@ writeup/
 /kalite/static/subtitles
 /kalite/private_key.pem
 /kalite/secrets.py
+/scripts/youtube-dl

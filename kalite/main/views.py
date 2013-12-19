@@ -33,8 +33,7 @@ from shared.caching import backend_cache_page
 from shared.decorators import require_admin
 from shared.i18n import select_best_available_language
 from shared.jobs import force_job
-from shared.topic_tools import get_ancestor, get_parent, get_neighbor_nodes
-from shared.topic_tools import get_topic_tree
+from shared.topic_tools import get_ancestor, get_parent, get_neighbor_nodes, get_topic_tree
 from shared.videos import stamp_availability_on_topic, stamp_availability_on_video, video_counts_need_update
 from utils.internet import is_loopback_connection, JsonResponse, get_ip_addresses
 
@@ -148,7 +147,7 @@ def refresh_topic_cache(handler, force=False):
 def splat_handler(request, splat):
     current_node = topicdata.TOPICS
     while current_node:
-        match = [ch for ch in (current_node['children'] or []) if request.path.startswith(ch["path"])]
+        match = [ch for ch in (current_node.get('children') or []) if request.path.startswith(ch["path"])]
         if not match:
             raise Http404
         current_node = match[0]
@@ -158,11 +157,12 @@ def splat_handler(request, splat):
     if current_node["kind"] == "Topic":
         return topic_handler(request, cached_nodes={"topic": current_node})
     elif current_node["kind"] == "Video":
-        prev, next = get_neighbor_nodes(current_node, neighbor_kind="Video")
+        prev, next = get_neighbor_nodes(current_node, neighbor_kind=current_node["kind"])
         return video_handler(request, cached_nodes={"video": current_node, "prev": prev, "next": next})
     elif current_node["kind"] == "Exercise":
         cached_nodes = topic_tools.get_related_videos(current_node, limit_to_available=False)
         cached_nodes["exercise"] = current_node
+        cached_nodes["prev"], cached_nodes["next"] = get_neighbor_nodes(current_node, neighbor_kind=current_node['kind'])
         return exercise_handler(request, cached_nodes=cached_nodes)
     else:
         raise Http404
@@ -253,7 +253,7 @@ def video_handler(request, video, format="mp4", prev=None, next=None):
 @backend_cache_page
 @render_to("exercise.html")
 @refresh_topic_cache
-def exercise_handler(request, exercise, **related_videos):
+def exercise_handler(request, exercise, prev=None, next=None, **related_videos):
     """
     Display an exercise
     """
@@ -281,6 +281,8 @@ def exercise_handler(request, exercise, **related_videos):
         "exercise_template": exercise_template,
         "exercise_lang": exercise_lang,
         "related_videos": [v for v in related_videos.values() if v["available"]],
+        "prev": prev,
+        "next": next,
     }
     context.update(license_context(exercise))
     return context
@@ -289,13 +291,16 @@ def exercise_handler(request, exercise, **related_videos):
 @backend_cache_page
 @render_to("knowledgemap.html")
 def exercise_dashboard(request):
-    # Just grab the first path, whatever it is
-    paths = dict((key, val[0]["path"]) for key, val in topicdata.NODE_CACHE["Exercise"].iteritems())
     slug = request.GET.get("topic")
+    if not slug:
+        title = _("Your Knowledge Map")
+    elif slug in topicdata.NODE_CACHE["Topic"]:
+        title = _(topicdata.NODE_CACHE["Topic"][slug][0]["title"])
+    else:
+        raise Http404
 
     context = {
-        "title": topicdata.NODE_CACHE["Topic"][slug][0]["title"] if slug else _("Your Knowledge Map"),
-        "exercise_paths": json.dumps(paths),
+        "title": title,
     }
     return context
 
@@ -319,7 +324,6 @@ def homepage(request, topics):
 @check_setup_status
 @render_to("admin_distributed.html")
 def easy_admin(request):
-
     context = {
         "wiki_url" : settings.CENTRAL_WIKI_URL,
         "central_server_host" : settings.CENTRAL_SERVER_HOST,

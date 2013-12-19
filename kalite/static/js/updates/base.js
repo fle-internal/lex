@@ -161,7 +161,7 @@ function updatesCheck(process_name, interval) {
                     show_message("info", gettext("Update cancelled successfully.") + " [" + process_name + "]", "id_" + process_name);
                     updatesReset(process_name);
                 } else if (progress_log.process_name) {
-                    show_message("error", gettext("Error during update") + ": " + progress_log.notes, "id_" + process_name);
+                    show_message("error", sprintf(gettext("Error during update: %(progress_log_notes)s"), { progress_log_notes : progress_log.notes }), "id_" + process_name);
                     updatesReset(process_name);
                 } else {
                 }
@@ -171,10 +171,10 @@ function updatesCheck(process_name, interval) {
             var message = resp.responseText || gettext("problem on server.");
 
             if (resp.state() == "rejected") {
-                message = getttext("Could not connect to the server.");
+                message = gettext("Could not connect to the server.");
             }
 
-            show_message("error", gettext("Error while checking update status") + ": " + message, "id_" + process_name);
+            show_message("error", sprintf(gettext("Error while checking update status: %(message)s"), { message : message }), "id_" + process_name);
 
             // Do callbacks
             if (process_callbacks[process_name] && "check" in process_callbacks[process_name]) {
@@ -193,6 +193,9 @@ function select_update_elements(process_name, selector) {
 function updateDisplay(process_name, progress_log) {
     window.progress_log = progress_log;
     window.process_name = process_name;
+
+    clear_message("id_" + process_name);
+
     if (progress_log.completed) {
         select_update_elements(process_name, ".progress-section").hide();
     } else if (progress_log.total_stages) {
@@ -202,8 +205,11 @@ function updateDisplay(process_name, progress_log) {
         select_update_elements(process_name, ".progressbar-current").progressbar({value: 100*progress_log.stage_percent});
         select_update_elements(process_name, ".progressbar-overall").progressbar({value: 100*progress_log.process_percent});
 
-        select_update_elements(process_name, ".stage-current").text(progress_log.cur_stage_num);
-        select_update_elements(process_name, ".stage-total").text(progress_log.total_stages);
+        select_update_elements(process_name, "#stage-summary").text(sprintf(gettext("Overall progress: %(percent_complete)5.2f%% complete (%(cur_stage)d of %(num_stages)d)"), {
+            cur_stage: progress_log.cur_stage_num,
+            num_stages: progress_log.total_stages,
+            percent_complete: 100*progress_log.process_percent
+        }));
 
         select_update_elements(process_name, ".stage-header").text(progress_log.notes || "Loading");
         select_update_elements(process_name, ".stage-name").text("");
