@@ -4,9 +4,13 @@ Miscellaneous utility functions (no dependence on non-standard packages, such as
 General string, integer, date functions.
 """
 import datetime
+import errno
 import json
 import os
-import errno
+import re
+import requests
+from copy import deepcopy
+from slugify import slugify
 
 
 class InvalidDateFormat(Exception):
@@ -204,6 +208,59 @@ def max_none(data):
             non_none_data.append(d)
     return max(non_none_data) if non_none_data else None
 
+
+def get_kind_by_extension(filename):
+    """Return filetype by the extension or empty string if it is not located in the lookup dictionary"""
+    # Hardcoded file types
+    file_kind_dictionary = {
+        "Video": ["mp4", "mov", "3gp", "amv", "asf", "asx", "avi", "mpg", "swf", "wmv"],
+        "Image": ["tif", "bmp", "png", "jpg", "jpeg"],
+        "Presentation": ["ppt", "pptx"],
+        "Spreadsheet": ["xls", "xlsx"],
+        "Code": ["html", "js", "css", "py", "pyc"],
+        "Audio": ["mp3", "wma", "wav", "mid", "ogg"],
+        "Document": ["pdf", "txt", "rtf", "html", "xml", "doc", "qxd", "docx"],
+        "Zip": ["zip"],
+        "No Extension": [""],
+    }
+    extension = os.path.splitext(filename)[1]
+    if extension:
+        extension = extension[1:].lower()
+    if extension in file_kind_dictionary["Video"]:
+        return "Video"
+    elif extension in file_kind_dictionary["Image"]:
+        return "Image"
+    elif extension in file_kind_dictionary["Presentation"]:
+        return "Presentation"
+    elif extension in file_kind_dictionary["Spreadsheet"]:
+        return "Spreadsheet"
+    elif extension in file_kind_dictionary["Audio"]:
+        return "Audio"
+    elif extension in file_kind_dictionary["Document"]:
+        return "Document"
+    elif extension in file_kind_dictionary["Code"]:
+        return "Code"
+    elif extension in file_kind_dictionary["Zip"]:
+        return "Zip"
+    elif extension in file_kind_dictionary["No Extension"]:
+        return "No Extension"
+    else:
+        return "Document" #raise Exception("Can't tell what type of file '%s' is by the extension '%s'. Please add to lookup dictionary and re-run command." % (filename, extension))
+
+
+def slugify_path(path):
+    slugified = []
+    for slug in path.split("/"):
+        slugified.append(slugify(slug))
+    slugified = os.path.join("/", *slugified)
+    return slugified
+
+
+def humanize_name(filename):
+    """Return human readable string from filename, by replacing:
+        - and _ with space
+    """
+    return re.sub('[-_]', ' ', filename)
 
 def softload_json(json_filepath, default={}, raises=False, logger=None, errmsg="Failed to read json file"):
     if default == {}:

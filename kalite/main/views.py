@@ -34,7 +34,7 @@ from shared.caching import backend_cache_page
 from shared.decorators import require_admin, distributed_server_only
 from shared.i18n import select_best_available_language
 from shared.jobs import force_job
-from shared.topic_tools import get_ancestor, get_parent, get_neighbor_nodes
+from shared.topic_tools import get_ancestor, get_parent, get_neighbor_nodes, get_topic_tree
 from shared.videos import stamp_availability_on_topic, stamp_availability_on_video, video_counts_need_update
 from utils.internet import is_loopback_connection, JsonResponse, get_ip_addresses
 
@@ -148,7 +148,6 @@ def refresh_topic_cache(handler, force=False):
 
 @backend_cache_page
 def splat_handler(request, splat):
-    slugs = filter(lambda x: x, splat.split("/"))
     current_node = topicdata.TOPICS
     while current_node:
         match = [ch for ch in (current_node.get('children') or []) if request.path.startswith(ch["path"])]
@@ -215,6 +214,7 @@ def topic_context(topic):
         "exercise_langs": exercise_langs,
         "topics": my_topics,
     }
+    context.update(license_context(topic))
     return context
 
 
@@ -252,6 +252,7 @@ def video_handler(request, video, format="mp4", prev=None, next=None):
         "backup_vids_available": bool(settings.BACKUP_VIDEO_SOURCE),
         "use_mplayer": settings.USE_MPLAYER and is_loopback_connection(request),
     }
+    context.update(license_context(video))
     return context
 
 
@@ -289,6 +290,7 @@ def exercise_handler(request, exercise, prev=None, next=None, **related_videos):
         "prev": prev,
         "next": next,
     }
+    context.update(license_context(exercise))
     return context
 
 
@@ -317,6 +319,7 @@ def homepage(request, topics):
     Homepage.
     """
     context = topic_context(topics)
+    context.update(license_context(topics))
     context.update({
         "title": "Home",
     })
@@ -455,6 +458,14 @@ def search(request, topics):  # we don't use the topics variable, but this setup
         'query': query,
         'max_results': max_results_per_category,
         'category': category,
+    }
+
+def license_context(node, topic_tree=None):
+    topic_tree = topic_tree or get_topic_tree()
+    attributions = set(node.get("attributions", [])).union(set([node["attribution"]]))
+
+    return {
+        "licenses": [lic for key, lic in topic_tree["licenses"].iteritems() if key in attributions],
     }
 
 def handler_403(request, *args, **kwargs):

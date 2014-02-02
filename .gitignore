@@ -26,8 +26,11 @@ writeup/
 /content/*.mp4
 /content/*.json
 /content/*.srt
+/content/local_content
 /data/i18n
+/data/local_topics
 /data/subtitles
+/data/topics.json
 /kalite/*.jpg
 /kalite/*.mp4.part
 /kalite/kalite-*.zip

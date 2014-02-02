@@ -72,6 +72,12 @@ def get_flat_topic_tree(force=False, lang_code=settings.LANGUAGE_CODE):
         FLAT_TOPIC_TREE[lang_code] = generate_flat_topic_tree(get_node_cache(force=force), lang_code=lang_code)
     return FLAT_TOPIC_TREE[lang_code]
 
+PATH2NODE_MAP = None
+def get_path2node_map(force=False):
+    global PATH2NODE_MAP
+    if PATH2NODE_MAP is None or force:
+        generate_path_to_node_map(get_node_cache(force=force))
+    return PATH2NODE_MAP
 
 def validate_ancestor_ids(topictree=None):
     """
@@ -112,6 +118,16 @@ def generate_slug_to_video_id_map(node_cache=None):
 
     return slug2id_map
 
+def generate_path_to_node_map(node_cache=None):
+    """Return map of node paths to their nodes"""
+
+    node_cache = node_cache or get_node_cache()
+    path2node_map = dict()
+    for kind, nodes in node_cache.items():
+        for node_id, node in nodes.items():
+            assert len(node) == 1, "Making sure Dylan understands node_cache"
+            path2node_map[node[0]["path"]] = node[0]
+    return path2node_map
 
 def generate_flat_topic_tree(node_cache=None, lang_code=settings.LANGUAGE_CODE):
     categories = node_cache or get_node_cache()
@@ -188,7 +204,7 @@ def get_exercises(topic):
 def get_live_topics(topic):
     """Given a topic node, returns all children that are not hidden and contain at least one video (non-recursively)"""
     # Note: "hide" is currently not stamped on any nodes, but could be in the future, so keeping here.
-    return filter(lambda node: node["kind"] == "Topic" and not node.get("hide") and "Video" in node["contains"], topic["children"])
+    return filter(lambda node: node["kind"] == "Topic" and not node.get("hide") and (set(node["contains"]) - set(["Topic"])), topic["children"])
 
 
 def get_downloaded_youtube_ids(videos_path=settings.CONTENT_ROOT, format="mp4"):
@@ -215,7 +231,7 @@ def get_topic_by_path(path, root_node=None):
         else:
             break
 
-    assert not cur_node or cur_node["path"] == path, "Either didn't find it, or found the right thing."
+    #assert not cur_node or cur_node["path"] == path, "Either didn't find it, or found the right thing."
 
     return cur_node or {}
 

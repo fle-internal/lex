@@ -171,8 +171,15 @@
                     {% endblock footerleft %}
                     </div>
                     <div id="copyright" class="tiny">
-                      {% trans "Videos and Exercises" %} &copy; 2013 Khan Academy
-                      <a rel="license" id="creative-commons-link" href="http://creativecommons.org/licenses/by-nc-sa/3.0/" target="_blank"></a>
+                    {% trans "Videos and Exercises" %}
+                    {% for license in licenses %}
+                        &copy; 2013 {{ license.entity }}
+                        {% if license.license == "cc-by-nc-sa" %}
+                        <a rel="license" id="creative-commons-link" href="http://creativecommons.org/licenses/by-nc-sa/{{ license.version }}/" target="_blank"></a>
+                        {% else %}
+                        {{ license.license }}
+                        {% endif %}
+                    {% endfor %}
                     </div>
                 </div>
             </div>

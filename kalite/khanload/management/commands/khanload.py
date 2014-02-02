@@ -133,6 +133,7 @@ def rebuild_topictree(remove_unknown_exercises=False, remove_disabled_topics=Tru
         # Add some attribute that should have been on there to start with.
         node["parent_id"] = ancestor_ids[-1] if ancestor_ids else None
         node["ancestor_ids"] = ancestor_ids
+        node["attribution"] = "ka"
 
         if kind == "Exercise":
             # For each exercise, need to set the exercise_id
@@ -172,12 +173,12 @@ def rebuild_topictree(remove_unknown_exercises=False, remove_disabled_topics=Tru
                 children_to_delete.append(i)
                 continue
             elif not child.get("live", True) and remove_disabled_topics:  # node is not live
-                logging.debug("Remvong non-live child: %s" % child[slug_key[child_kind]])
+                logging.debug("Removing non-live child: %s" % child[slug_key[child_kind]])
                 children_to_delete.append(i)
                 continue
             elif child.get("hide", False) and remove_disabled_topics:  # node is hidden. Note that root is hidden, and we're implicitly skipping that.
                 children_to_delete.append(i)
-                logging.debug("Remvong hidden child: %s" % child[slug_key[child_kind]])
+                logging.debug("Removing hidden child: %s" % child[slug_key[child_kind]])
                 continue
             elif child_kind == "Video" and set(["mp4", "png"]) - set(child.get("download_urls", {}).keys()):
                 # for now, since we expect the missing videos to be filled in soon,
@@ -196,6 +197,7 @@ def rebuild_topictree(remove_unknown_exercises=False, remove_disabled_topics=Tru
         # Mark on topics whether they contain Videos, Exercises, or both
         if kind == "Topic":
             node["contains"] = list(child_kinds)
+            node["attributions"] = ["ka"]
 
         return child_kinds
     recurse_nodes(topic_tree)
@@ -309,6 +311,11 @@ def rebuild_topictree(remove_unknown_exercises=False, remove_disabled_topics=Tru
         for ci in reversed(children_to_delete):
             del node["children"][ci]
     recurse_nodes_to_remove_childless_nodes(topic_tree)
+
+    # Add the license info
+    topic_tree["licenses"] =  {
+        "ka": {"entity": "Khan Academy", "license": "cc-by-nc-sa", "version": "3"},
+    }
 
     return topic_tree
 
